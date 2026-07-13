@@ -1,27 +1,38 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "White-label e-commerce platform backend (Fastify + Prisma)",
+  "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "db:check": "prisma db execute --file prisma/check.sql",
+    "create-admin": "tsx src/scripts/createAdmin.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "dependencies": {
+    "@fastify/cors": "^11.3.0",
+    "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "bcrypt": "^6.0.0",
     "dotenv": "^17.4.2",
     "fastify": "^5.10.0",
     "jsonwebtoken": "^9.0.3",
+    "pg": "^8.22.0",
     "prisma": "^7.8.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^26.1.1",
+    "@types/pg": "^8.20.0",
     "nodemon": "^3.1.14",
     "tsx": "^4.23.0",
     "typescript": "^7.0.2"

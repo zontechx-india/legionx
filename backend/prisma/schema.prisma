@@ -1,13 +1,328 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// White-label e-commerce platform — core data model (Phase 1)
+// Docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  runtime      = "nodejs"
+  moduleFormat = "esm"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PACKED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  COD
+  UPI
+  RAZORPAY
+  CARD
+  NETBANKING
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum ShippingType {
+  FIXED
+  DISTRICT
+  STATE
+  FREE
+}
+
+enum OtpChannel {
+  SMS
+  EMAIL
+}
+
+enum OtpPurpose {
+  LOGIN // email/phone OTP sign-in
+  LINK // linking a second identifier to an existing account
+  ORDER_PLACEMENT // guest checkout verification
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+}
+
+// ---------------------------------------------------------------------------
+// White-label store configuration (single row)
+// Branding / contact / defaults that let one codebase serve any business.
+// ---------------------------------------------------------------------------
+
+model StoreSetting {
+  id           String   @id @default(cuid())
+  businessName String
+  businessType String   @default("General")
+  logoUrl      String?
+  about        String?
+  contactEmail String?
+  contactPhone String?
+  address      String?
+  socialLinks  Json? // { instagram, facebook, whatsapp, ... }
+  currency     String   @default("INR")
+  // Order-independent shipping default; per-rule config lives in ShippingRule.
+  lowStockThreshold Int  @default(5)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("store_settings")
+}
+
+// ---------------------------------------------------------------------------
+// Catalog
+// ---------------------------------------------------------------------------
+
+model Category {
+  id           String     @id @default(cuid())
+  name         String
+  slug         String     @unique
+  description  String?
+  imageUrl     String?
+  displayOrder Int        @default(0)
+  isActive     Boolean    @default(true)
+  // Self-relation enables arbitrary category trees (Sports > Cricket Bat)
+  // without code changes — core to the white-label requirement.
+  parentId     String?
+  parent       Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children     Category[] @relation("CategoryTree")
+  products     Product[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([parentId])
+  @@index([isActive])
+  @@map("categories")
+}
+
+model Product {
+  id                String         @id @default(cuid())
+  name              String
+  slug              String         @unique
+  sku               String         @unique
+  brand             String?
+  description       String?
+  price             Decimal        @db.Decimal(10, 2)
+  discountPrice     Decimal?       @db.Decimal(10, 2)
+  stockQuantity     Int            @default(0)
+  // Overrides StoreSetting.lowStockThreshold when set.
+  lowStockThreshold Int?
+  // Flexible per-product spec map so any product type works without schema
+  // changes: { "Weight": "1.2kg", "Willow": "English", ... }
+  specifications    Json?
+  status            ProductStatus  @default(ACTIVE)
+  isFeatured        Boolean        @default(false)
+  categoryId        String
+  category          Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  images            ProductImage[]
+  orderItems        OrderItem[]
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  @@index([categoryId])
+  @@index([status])
+  @@index([isFeatured])
+  @@map("products")
+}
+
+model ProductImage {
+  id           String   @id @default(cuid())
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url          String
+  isCover      Boolean  @default(false)
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@index([productId])
+  @@map("product_images")
+}
+
+// ---------------------------------------------------------------------------
+// Customers & Orders (guest checkout — account not mandatory)
+// ---------------------------------------------------------------------------
+
+model Customer {
+  id String @id @default(cuid())
+
+  // A customer is identified by email and/or phone. At least one is present
+  // (enforced by the auth service); each is unique to a single account, so an
+  // email/phone maps to exactly one customer. Verified via OTP at sign-in or
+  // when linked later from the profile.
+  email           String?   @unique
+  phone           String?   @unique
+  emailVerifiedAt DateTime?
+  phoneVerifiedAt DateTime?
+
+  name      String?
+  altPhone  String? // secondary contact number, not a login identifier
+  orders    Order[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("customers")
+}
+
+model Order {
+  id          String   @id @default(cuid())
+  orderNumber String   @unique
+  status      OrderStatus @default(PENDING)
+
+  // Optional link to a Customer; snapshot fields below keep the order
+  // self-contained even for pure guests or after profile edits.
+  customerId  String?
+  customer    Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  // Delivery snapshot (captured at checkout)
+  customerName String
+  customerPhone String
+  altPhone     String?
+  addressLine  String
+  district     String
+  state        String
+  pincode      String
+
+  // Money (all snapshots at time of order)
+  subtotal       Decimal @db.Decimal(10, 2)
+  shippingCharge Decimal @db.Decimal(10, 2) @default(0)
+  total          Decimal @db.Decimal(10, 2)
+
+  paymentMethod PaymentMethod @default(COD)
+  paymentStatus PaymentStatus @default(PENDING)
+
+  estimatedDeliveryAt DateTime?
+  placedAt            DateTime  @default(now())
+  items               OrderItem[]
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([customerId])
+  @@index([customerPhone])
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // Product link is nullable + snapshotted so historical orders survive
+  // product edits/deletes.
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName String
+  sku         String
+  unitPrice   Decimal @db.Decimal(10, 2)
+  quantity    Int
+  lineTotal   Decimal @db.Decimal(10, 2)
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+// ---------------------------------------------------------------------------
+// Shipping configuration (calculated automatically at checkout)
+// ---------------------------------------------------------------------------
+
+model ShippingRule {
+  id            String       @id @default(cuid())
+  type          ShippingType
+  // Region name for DISTRICT/STATE rules; null for FIXED/FREE.
+  region        String?
+  amount        Decimal      @db.Decimal(10, 2) @default(0)
+  // For FREE rules: order subtotal at/above which shipping is waived.
+  minOrderAmount Decimal?    @db.Decimal(10, 2)
+  isActive      Boolean      @default(true)
+  // Lower number = evaluated first (more specific rules win).
+  priority      Int          @default(0)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([type])
+  @@index([isActive])
+  @@map("shipping_rules")
+}
+
+// ---------------------------------------------------------------------------
+// OTP verification (order placement + order-history access)
+// ---------------------------------------------------------------------------
+
+model Otp {
+  id          String     @id @default(cuid())
+  channel     OtpChannel
+  destination String // email address or phone number the code was sent to
+  // Store a hash of the code, never the plaintext.
+  codeHash    String
+  purpose     OtpPurpose
+  // Set for LINK requests — the account the identifier is being linked to.
+  customerId  String?
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  attempts    Int        @default(0)
+  createdAt   DateTime   @default(now())
+
+  @@index([destination, purpose])
+  @@index([expiresAt])
+  @@map("otps")
+}
+
+// ---------------------------------------------------------------------------
+// Home banners (carousel)
+// ---------------------------------------------------------------------------
+
+model Banner {
+  id           String   @id @default(cuid())
+  title        String?
+  imageUrl     String
+  linkUrl      String?
+  displayOrder Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([isActive])
+  @@map("banners")
+}
+
+// ---------------------------------------------------------------------------
+// Admin users (multiple admins ready; roles for future granularity)
+// ---------------------------------------------------------------------------
+
+model Admin {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String?
+  role         AdminRole @default(ADMIN)
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("admins")
 }

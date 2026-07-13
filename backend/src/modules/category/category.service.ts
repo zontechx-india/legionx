@@ -1,0 +1,142 @@
+import { prisma } from "../../config/prisma.js";
+import { Prisma } from "../../generated/prisma/client.js";
+import { slugify } from "../../utils/slug.js";
+import { buildListMeta } from "../../utils/response.js";
+import { HttpError } from "../../utils/httpError.js";
+import type {
+  CategoryCreateInput,
+  CategoryUpdateInput,
+  CategoryListQuery,
+} from "./category.schema.js";
+
+const categorySelect = {
+  id: true,
+  name: true,
+  slug: true,
+  description: true,
+  imageUrl: true,
+  displayOrder: true,
+  isActive: true,
+  parentId: true,
+  createdAt: true,
+  updatedAt: true,
+  _count: { select: { products: true, children: true } },
+} satisfies Prisma.CategorySelect;
+
+/** Ensures the generated slug is unique, appending -2, -3, ... on collision. */
+async function uniqueSlug(base: string, excludeId?: string): Promise<string> {
+  const root = base || "category";
+  let candidate = root;
+  let n = 1;
+  // Loop is bounded in practice by the number of same-named categories.
+  for (;;) {
+    const existing = await prisma.category.findUnique({
+      where: { slug: candidate },
+      select: { id: true },
+    });
+    if (!existing || existing.id === excludeId) return candidate;
+    n += 1;
+    candidate = `${root}-${n}`;
+  }
+}
+
+export async function listCategories(query: CategoryListQuery) {
+  const { page, pageSize, q, parentId, rootOnly, isActive } = query;
+
+  const where: Prisma.CategoryWhereInput = {};
+  if (isActive !== undefined) where.isActive = isActive;
+  if (rootOnly) where.parentId = null;
+  else if (parentId) where.parentId = parentId;
+  if (q) where.name = { contains: q, mode: "insensitive" };
+
+  const [items, total] = await prisma.$transaction([
+    prisma.category.findMany({
+      where,
+      select: categorySelect,
+      orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.category.count({ where }),
+  ]);
+
+  return { items, meta: buildListMeta(total, page, pageSize) };
+}
+
+export async function getCategoryBySlug(slug: string) {
+  const category = await prisma.category.findUnique({
+    where: { slug },
+    select: {
+      ...categorySelect,
+      parent: { select: { id: true, name: true, slug: true } },
+      children: {
+        where: { isActive: true },
+        select: categorySelect,
+        orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
+      },
+    },
+  });
+  if (!category) throw HttpError.notFound("Category not found");
+  return category;
+}
+
+export async function getCategoryById(id: string) {
+  const category = await prisma.category.findUnique({
+    where: { id },
+    select: categorySelect,
+  });
+  if (!category) throw HttpError.notFound("Category not found");
+  return category;
+}
+
+export async function createCategory(input: CategoryCreateInput) {
+  const slug = await uniqueSlug(slugify(input.name));
+
+  const data: Prisma.CategoryUncheckedCreateInput = { name: input.name, slug };
+  if (input.description !== undefined) data.description = input.description;
+  if (input.imageUrl !== undefined) data.imageUrl = input.imageUrl;
+  if (input.displayOrder !== undefined) data.displayOrder = input.displayOrder;
+  if (input.isActive !== undefined) data.isActive = input.isActive;
+  if (input.parentId !== undefined) data.parentId = input.parentId;
+
+  return prisma.category.create({ data, select: categorySelect });
+}
+
+export async function updateCategory(id: string, input: CategoryUpdateInput) {
+  if (input.parentId && input.parentId === id) {
+    throw HttpError.badRequest("A category cannot be its own parent.");
+  }
+
+  const data: Prisma.CategoryUncheckedUpdateInput = {};
+  if (input.name !== undefined) data.name = input.name;
+  if (input.description !== undefined) data.description = input.description;
+  if (input.imageUrl !== undefined) data.imageUrl = input.imageUrl;
+  if (input.displayOrder !== undefined) data.displayOrder = input.displayOrder;
+  if (input.isActive !== undefined) data.isActive = input.isActive;
+  if (input.parentId !== undefined) data.parentId = input.parentId;
+
+  // Throws P2025 -> 404 via the global handler if the id doesn't exist.
+  return prisma.category.update({ where: { id }, data, select: categorySelect });
+}
+
+export async function deleteCategory(id: string) {
+  const category = await prisma.category.findUnique({
+    where: { id },
+    select: { _count: { select: { products: true, children: true } } },
+  });
+  if (!category) throw HttpError.notFound("Category not found");
+
+  if (category._count.products > 0) {
+    throw HttpError.conflict(
+      "Cannot delete a category that still has products. Move or delete them first.",
+    );
+  }
+  if (category._count.children > 0) {
+    throw HttpError.conflict(
+      "Cannot delete a category that has sub-categories. Remove them first.",
+    );
+  }
+
+  await prisma.category.delete({ where: { id } });
+  return { id };
+}

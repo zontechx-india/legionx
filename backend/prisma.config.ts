@@ -9,6 +9,9 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    // Prisma CLI / Migrate use the DIRECT connection (port 5432) — migrations
+    // cannot run over the PgBouncer transaction pooler. The runtime client uses
+    // the pooled DATABASE_URL via a driver adapter passed to PrismaClient.
+    url: process.env["DIRECT_URL"] ?? process.env["DATABASE_URL"],
   },
 });

@@ -254,6 +254,34 @@ Customer account creation is **not mandatory**.
 
 ---
 
+# Authentication Requirements
+
+As this is a global e-commerce platform, the authentication system should support both **email** and **mobile number** login.
+
+## Login Options
+- Users can register or log in using either:
+  - Email address
+  - Mobile number (OTP)
+
+## Account Linking
+- If a user signs in using a **mobile number**, they can link an **email address** later from the Profile section.
+- If a user signs in using an **email address**, they can link a **mobile number** later from the Profile section.
+
+## Linking Rules
+- A mobile number can be linked to **only one user account**.
+- An email address can be linked to **only one user account**.
+- A mobile number cannot be linked to multiple email accounts.
+- An email address cannot be linked to multiple mobile numbers.
+
+## Verification
+- Email linking must be verified using an email verification link or OTP.
+- Mobile number linking must be verified using an SMS OTP.
+- Linking is completed only after successful verification.
+
+This approach provides a flexible authentication experience while ensuring that each email address and mobile number uniquely identifies a single user account.
+
+---
+
 # Search
 
 - Product Search

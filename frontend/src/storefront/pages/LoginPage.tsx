@@ -576,15 +576,15 @@ function PhoneOtp({
   return (
     <form className="space-y-4" onSubmit={verify}>
       <p className="text-sm text-muted">
-        Enter the 6-digit code sent to{' '}
+        Enter the code sent to{' '}
         <span className="font-medium text-fg">{phone}</span>
       </p>
       {devCode && <InfoNote>Dev mode — use code {devCode}</InfoNote>}
       <TextField
         label="One-time code"
         inputMode="numeric"
-        maxLength={6}
-        placeholder="Enter 6-digit code"
+        maxLength={8}
+        placeholder="Enter the code"
         icon={<ShieldIcon />}
         value={code}
         onChange={(e) => {
@@ -595,7 +595,9 @@ function PhoneOtp({
         className="tracking-[0.3em]"
       />
       {error && <ErrorNote>{error}</ErrorNote>}
-      <PrimaryButton type="submit" disabled={busy || code.length < 6}>
+      {/* Real SMS codes are 4 digits (Message Central default); the dev
+          fallback/bypass sends 6 — so gate at the backend's minimum. */}
+      <PrimaryButton type="submit" disabled={busy || code.length < 4}>
         {busy ? 'Verifying…' : 'Verify & sign in'}
       </PrimaryButton>
       <div className="flex items-center justify-between text-xs">

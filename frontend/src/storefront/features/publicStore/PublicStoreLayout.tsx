@@ -8,7 +8,6 @@ import { StoreIcon } from '../../layout/icons'
 import { StoreFooter } from './StoreFooter'
 import { StoreHeader } from './StoreHeader'
 import { SKIN, storeVars, type Skin } from './storeTheme'
-import { rememberLastStore } from './useStoreShells'
 import { rememberStoreVisit } from '../discovery/recentActivity'
 
 /**
@@ -73,8 +72,6 @@ export function PublicStoreLayout() {
         // its uploaded logo, or the app favicon when it has none. Restored
         // on the way out by this effect's cleanup.
         setFavicon(found.logoUrl)
-        // The cart pages continue this store's theme ("last visited store").
-        rememberLastStore(found.slug)
         // The marketplace homepage's "Recently Viewed" rail (published
         // stores only — a draft preview is not a shopping visit).
         if (found.isPublished) {

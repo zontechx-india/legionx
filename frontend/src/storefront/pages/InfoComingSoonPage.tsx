@@ -4,9 +4,9 @@ import { AppLogoMark } from '../../shared/ui/AppLogo'
 
 /**
  * Public placeholder for the marketplace footer pages (About, Privacy,
- * Terms, Support, Contact). Unlike `ComingSoonPage` it needs no session and
- * no dashboard shell — a shared link must land here for anonymous visitors
- * without bouncing through /login.
+ * Terms, Support, Contact). It needs no session and no dashboard shell —
+ * a shared link must land here for anonymous visitors without bouncing
+ * through /login.
  */
 const TITLES: Record<string, string> = {
   '/about': 'About',

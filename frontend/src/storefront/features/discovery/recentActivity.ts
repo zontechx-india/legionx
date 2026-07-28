@@ -11,7 +11,7 @@ import { useSyncExternalStore } from 'react'
 const SEARCHES_KEY = 'uniemax.recentSearches'
 const STORES_KEY = 'uniemax.recentStores'
 const MAX_SEARCHES = 8
-const MAX_STORES = 8
+const MAX_STORES = 12
 
 /** What a "recently viewed" card needs — a snapshot, never refetched. */
 export interface RecentStore {

@@ -49,21 +49,9 @@ export const router = createBrowserRouter([
             }),
           },
           {
-            path: 'wishlist',
-            lazy: async () => ({
-              Component: (await import('../pages/ComingSoonPage')).ComingSoonPage,
-            }),
-          },
-          {
-            path: 'settings',
-            lazy: async () => ({
-              Component: (await import('../pages/ComingSoonPage')).ComingSoonPage,
-            }),
-          },
-          {
             path: 'profile',
             lazy: async () => ({
-              Component: (await import('../pages/ComingSoonPage')).ComingSoonPage,
+              Component: (await import('../pages/ProfilePage')).ProfilePage,
             }),
           },
           {

@@ -3,7 +3,7 @@ import { cart, groupByStore, useCart } from '../../features/cart/cart'
 import { useCartRevalidation } from '../../features/cart/useCartRevalidation'
 import { storeVars } from '../../features/publicStore/storeTheme'
 import { useStoreShell } from '../../features/publicStore/useStoreShells'
-import { formatPrice, storeHomeUrl } from '../../features/stores/storesApi'
+import { cartUrl, formatPrice, storeHomeUrl } from '../../features/stores/storesApi'
 import { usePageTitle } from '../../../shared/usePageTitle'
 import {
   ArrowLeftIcon,
@@ -24,8 +24,8 @@ import { StoreLogo } from './StoreLogo'
  *
  * Because this page belongs to ONE store, it renders in that store's theme
  * (`storeVars` once the shell loads) — a customer arriving from a dark
- * storefront stays in the store's world. Only the multi-store /cart overview
- * keeps the app's neutral palette.
+ * storefront stays in the store's world. Its links back to the combined
+ * /cart carry `?from={storeSlug}` so the theme continues there too.
  */
 export function CartStorePage({ storeSlug }: { storeSlug: string }) {
   const items = useCart()
@@ -42,7 +42,8 @@ export function CartStorePage({ storeSlug }: { storeSlug: string }) {
       <header className="sticky top-0 z-40 border-b border-line bg-bg">
         <div className="mx-auto flex max-w-[1920px] items-center gap-3 px-4 py-3 sm:px-6 lg:px-10">
           <Link
-            to="/cart"
+            // Keep this store's theme when going back to the combined cart.
+            to={cartUrl(storeSlug)}
             aria-label="Back to cart"
             className="flex h-10 w-10 items-center justify-center rounded-full text-muted transition hover:bg-surface-alt"
           >
@@ -57,7 +58,7 @@ export function CartStorePage({ storeSlug }: { storeSlug: string }) {
 
       <main className="mx-auto w-full max-w-[1920px] flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-10">
         {!group ? (
-          <NothingFromStore />
+          <NothingFromStore storeSlug={storeSlug} />
         ) : (
           <>
             <div className="flex items-center gap-3">
@@ -141,7 +142,7 @@ export function CartStorePage({ storeSlug }: { storeSlug: string }) {
   )
 }
 
-function NothingFromStore() {
+function NothingFromStore({ storeSlug }: { storeSlug: string }) {
   return (
     <div className="flex flex-col items-center rounded-xl border border-line bg-surface px-6 py-16 text-center">
       <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-surface-alt text-muted">
@@ -154,7 +155,7 @@ function NothingFromStore() {
         Your cart has no items from this store (they may have been removed).
       </p>
       <Link
-        to="/cart"
+        to={cartUrl(storeSlug)}
         className="metal-cta mt-5 rounded-md px-5 py-2.5 text-sm font-semibold text-cta-contrast transition"
       >
         Back to cart

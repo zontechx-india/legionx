@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { cart, useCartQty } from '../cart/cart'
+import { cartUrl } from '../stores/storesApi'
 import { CartIcon, CheckIcon, MinusIcon, PlusIcon } from '../../layout/icons'
 import { stockLevel } from './catalog'
 import type { Skin } from './storeTheme'
@@ -103,14 +104,14 @@ export function AddToCartControl({
           <CartIcon className="h-4 w-4" />
           {compact ? 'Add' : 'Add to Cart'}
         </button>
-        {added && <AddedToast name={name} />}
+        {added && <AddedToast name={name} storeSlug={storeSlug} />}
       </>
     )
   }
 
   return (
     <>
-    {added && <AddedToast name={name} />}
+    {added && <AddedToast name={name} storeSlug={storeSlug} />}
     <span
       className={`inline-flex h-9 items-center justify-between overflow-hidden rounded-md border ${skin.border} ${skin.chip} ${
         block ? 'w-full' : ''
@@ -146,7 +147,7 @@ export function AddToCartControl({
  * the cart. App-styled (not store-themed): like the draft banner, it is
  * chrome talking to the visitor, not part of the store's design.
  */
-function AddedToast({ name }: { name: string }) {
+function AddedToast({ name, storeSlug }: { name: string; storeSlug: string }) {
   return (
     <div
       role="status"
@@ -163,7 +164,8 @@ function AddedToast({ name }: { name: string }) {
         </span>
       </p>
       <Link
-        to="/cart"
+        // ?from= keeps the cart in this store's theme (see cartUrl).
+        to={cartUrl(storeSlug)}
         className="shrink-0 rounded-md border border-line px-3 py-2 text-xs font-bold text-brand transition hover:bg-surface-alt"
       >
         View cart

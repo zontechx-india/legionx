@@ -162,10 +162,16 @@ function shapeListProduct(row: ListProductRow) {
 // Marketplace store index — "New Stores" on the platform homepage
 // ---------------------------------------------------------------------------
 
+/** How many product thumbnails a marketplace store card previews. */
+const STORE_PREVIEW_IMAGES = 4;
+
 /**
- * Published stores, newest publish first. Card-sized payload only (branding,
- * never catalog data) — the storefront shell endpoint serves everything else
- * once a visitor enters a store.
+ * Published stores, newest publish first. Card-sized payload: branding plus
+ * a taste of the catalog — the visible-product count and up to
+ * `STORE_PREVIEW_IMAGES` cover thumbnails — so a marketplace card can show
+ * real merchandise without shipping catalog data. Both use
+ * `PUBLIC_PRODUCT_VISIBILITY`, so the card never previews (or counts)
+ * anything the store page would hide.
  */
 export async function listPublicStores(query: PublicStoreListQuery) {
   const where: Prisma.StoreWhereInput = { isPublished: true };
@@ -180,6 +186,25 @@ export async function listPublicStores(query: PublicStoreListQuery) {
         slug: true,
         logoKey: true,
         publishedAt: true,
+        _count: { select: { products: { where: PUBLIC_PRODUCT_VISIBILITY } } },
+        // Newest visible products that HAVE a photo — each contributes its
+        // cover image to the card's preview strip.
+        products: {
+          where: {
+            ...PUBLIC_PRODUCT_VISIBILITY,
+            media: { some: { type: "IMAGE" } },
+          },
+          orderBy: { createdAt: "desc" },
+          take: STORE_PREVIEW_IMAGES,
+          select: {
+            media: {
+              where: { type: "IMAGE" },
+              orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
+              take: 1,
+              select: { key: true },
+            },
+          },
+        },
       },
       // publishedAt is stamped on first publish; nulls (pre-column rows the
       // backfill hasn't touched yet) sink to the end instead of floating up.
@@ -194,9 +219,13 @@ export async function listPublicStores(query: PublicStoreListQuery) {
 
   return {
     total,
-    stores: rows.map(({ logoKey, ...store }) => ({
+    stores: rows.map(({ logoKey, _count, products, ...store }) => ({
       ...store,
       logoUrl: mediaUrl("logo", logoKey),
+      productCount: _count.products,
+      previewImages: products
+        .map((p) => mediaUrl("media", p.media[0]?.key ?? null))
+        .filter((url): url is string => url !== null),
     })),
   };
 }

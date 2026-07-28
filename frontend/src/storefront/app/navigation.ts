@@ -1,19 +1,11 @@
 import type { ComponentType } from 'react'
-import {
-  BagIcon,
-  HeartIcon,
-  HomeIcon,
-  MapPinIcon,
-  SettingsIcon,
-  UserIcon,
-} from '../layout/icons'
+import { BagIcon, MapPinIcon, UserIcon } from '../layout/icons'
 
 /**
- * Single source of truth for the storefront sidebar.
- *
- * Adding a page = one entry here + one route in `app/router.tsx`.
- * `end` marks routes that must match exactly (only "/" needs it, otherwise
- * it would stay highlighted on every child path).
+ * Single source of truth for the account navigation (the top-bar avatar
+ * dropdown). The old sidebar is gone — the account menu is the one place
+ * these links live. Adding a page = one entry here + one route in
+ * `app/router.tsx`.
  */
 export interface NavItem {
   label: string
@@ -21,13 +13,6 @@ export interface NavItem {
   icon: ComponentType<{ className?: string }>
   end?: boolean
 }
-
-export const NAV_ITEMS: NavItem[] = [
-  { label: 'Home', to: '/', icon: HomeIcon, end: true },
-  { label: 'Orders', to: '/orders', icon: BagIcon },
-  { label: 'Wishlist', to: '/wishlist', icon: HeartIcon },
-  { label: 'Settings', to: '/settings', icon: SettingsIcon },
-]
 
 /**
  * Top-bar avatar dropdown (Flipkart-style "Your Account" menu).
@@ -40,5 +25,4 @@ export const ACCOUNT_MENU_ITEMS: NavItem[] = [
   { label: 'My Profile', to: '/profile', icon: UserIcon },
   { label: 'Orders', to: '/orders', icon: BagIcon },
   { label: 'Saved Addresses', to: '/addresses', icon: MapPinIcon },
-  { label: 'Favourites', to: '/wishlist', icon: HeartIcon },
 ]

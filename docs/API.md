@@ -789,7 +789,10 @@ too). Decimals serialize as strings.
 Marketplace store **index** — published stores only, newest publish first
 (feeds the homepage "New Stores" rail). Ordered by `publishedAt` (stamped on
 a store's **first** publish — re-publishing an old store doesn't bump it),
-nulls last, then `createdAt`.
+nulls last, then `createdAt`. Each card carries a taste of the catalog:
+`productCount` (publicly visible products) and `previewImages` (cover-image
+URLs of the newest visible products that have a photo, max 4) — both follow
+the same visibility rule the store page enforces.
 
 | Query      | Type | Default | Notes            |
 | ---------- | ---- | ------- | ---------------- |
@@ -798,7 +801,8 @@ nulls last, then `createdAt`.
 
 ```jsonc
 { "success": true,
-  "data": [ { "id", "name", "slug", "logoUrl", "publishedAt" } ],
+  "data": [ { "id", "name", "slug", "logoUrl", "publishedAt",
+              "productCount": 12, "previewImages": ["https://…", …] } ],
   "meta": { "total", "page", "pageSize", "totalPages" } }
 ```
 
@@ -1006,14 +1010,49 @@ product hits respect the owner's `hideFromSearch` flag. Matching is
 name-`contains` (categories/products) — the upgrade path at large scale is a
 pg_trgm/FTS index behind the same contract.
 
-### `GET /api/v1/public/stats`
+### `GET /api/v1/public/products`
 
-Marketplace trust counters — published stores + publicly visible products
-(an orders counter can join now that orders exist). Served from a 60 s
-in-process cache, so homepage traffic costs one count-scan per minute.
+Platform-wide product rail — the **newest** discoverable products across all
+published stores (feeds the homepage "Fresh Finds" row). Recency-only by
+design (no popularity/analytics sort exists yet). Enforces the same rules as
+global search: `PUBLIC_PRODUCT_VISIBILITY`, published store, and the owner's
+`hideFromSearch` opt-out. Items share the search product-hit shape.
+
+| Query      | Type | Default | Notes   |
+| ---------- | ---- | ------- | ------- |
+| `page`     | int  | 1       |         |
+| `pageSize` | int  | 20      | max 100 |
 
 ```jsonc
-{ "success": true, "data": { "stores": 18, "products": 642 } }
+{ "success": true,
+  "data": [ { "id", "name", "slug", "price", "stockQuantity",
+              "categoryName", "store": { "name", "slug" },
+              "image": { "url", "altText" } | null } ],
+  "meta": { "total", "page", "pageSize", "totalPages" } }
+```
+
+### `GET /api/v1/public/categories`
+
+Homepage "Shop by Category" chips. Categories are per-store (no global
+taxonomy), so this aggregates: the most common category **names** across
+published stores, grouped case-insensitively (most frequent spelling wins),
+ordered by spread, max 12. Only categories with at least one publicly
+visible product count — a chip never leads to an empty search. Served from
+a 60 s in-process cache.
+
+```jsonc
+{ "success": true, "data": [ { "name": "Cricket", "count": 7 }, … ] }
+```
+
+### `GET /api/v1/public/stats`
+
+Marketplace trust counters — published stores, publicly visible products,
+and orders placed (all statuses except `CANCELLED`; orders survive store
+deletion, so the count never shrinks). Served from a 60 s in-process cache,
+so homepage traffic costs one count-scan per minute.
+
+```jsonc
+{ "success": true, "data": { "stores": 18, "products": 642, "orders": 97 } }
 ```
 
 ---

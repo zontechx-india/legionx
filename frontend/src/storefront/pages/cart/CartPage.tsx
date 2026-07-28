@@ -1,12 +1,9 @@
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { groupByStore, useCart } from '../../features/cart/cart'
 import type { CartStoreGroup } from '../../features/cart/cart'
 import { useCartRevalidation } from '../../features/cart/useCartRevalidation'
 import { storeVars } from '../../features/publicStore/storeTheme'
-import {
-  cartThemeSlug,
-  useStoreShells,
-} from '../../features/publicStore/useStoreShells'
+import { useStoreShells } from '../../features/publicStore/useStoreShells'
 import { formatPrice, storeHomeUrl } from '../../features/stores/storesApi'
 import type { PublicStore } from '../../features/stores/storesApi'
 import { usePageTitle } from '../../../shared/usePageTitle'
@@ -24,10 +21,15 @@ const PREVIEW_LINES = 3
  * page (/cart/{storeSlug}) for the full list.
  *
  * Styling matches the storefront treatment (full-width shell, flat surfaces
- * + borders, Oswald headings) and **continues a store's theme**: the cart's
- * only store, or — with several stores — the one the visitor browsed most
- * recently (`cartThemeSlug`). Each store group carries its own logo,
- * "Continue shopping" path and per-store "Place Order" button.
+ * + borders, Oswald headings) and **continues the theme of the store the
+ * visitor opened the cart from** — carried explicitly as `?from={slug}` by
+ * every cart link inside a store (see `cartUrl`), regardless of which
+ * stores' items are inside. Opened from the marketplace (homepage — plain
+ * /cart, no `from`) it renders the neutral palette that follows the
+ * visitor's light/dark toggle. The context lives in the URL, never in
+ * storage: back/forward, refresh and multiple tabs restore it correctly.
+ * Each store group carries its own logo, "Continue shopping" path and
+ * per-store "Place Order" button.
  *
  * On mount the cart **revalidates**: prices/stock are re-fetched and synced,
  * so stale add-time snapshots correct themselves before checkout exists.
@@ -37,15 +39,16 @@ export function CartPage() {
   const items = useCart()
   const revalidation = useCartRevalidation()
   const groups = groupByStore(items)
-  // The store whose theme this page continues: the cart's only store, or
-  // the store the visitor browsed most recently (see cartThemeSlug).
-  const themeSlug = cartThemeSlug(groups.map((g) => g.storeSlug))
-  // Shells (logo + theme) for every store in the cart — cached per session.
+  // The store this cart visit came from (?from=slug, set by every cart link
+  // inside a store) — its theme wraps the page; absent → neutral.
+  const [searchParams] = useSearchParams()
+  const fromSlug = searchParams.get('from')
+  // Shells for every store in the cart (logos) + the theme source.
   const shells = useStoreShells([
     ...groups.map((g) => g.storeSlug),
-    ...(themeSlug ? [themeSlug] : []),
+    ...(fromSlug ? [fromSlug] : []),
   ])
-  const themeShell = themeSlug ? shells[themeSlug] : undefined
+  const themeShell = fromSlug ? shells[fromSlug] : undefined
   const total = groups.reduce((sum, g) => sum + g.subtotal, 0)
   const count = groups.reduce((sum, g) => sum + g.itemCount, 0)
 

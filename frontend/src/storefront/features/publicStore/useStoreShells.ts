@@ -54,45 +54,11 @@ export function useStoreShell(slug: string): PublicStore | null | undefined {
   return useStoreShells(slug ? [slug] : [])[slug]
 }
 
-// ---------------------------------------------------------------------------
-// Last visited store — lets the multi-store /cart continue the theme of the
-// store the visitor came from. Session-scoped on purpose: a new visit starts
-// neutral rather than resurrecting last week's store.
-// ---------------------------------------------------------------------------
-
-// sessionStorage is per-tab and short-lived — a plain rename, no migration.
-const LAST_STORE_KEY = 'uniemax.lastStore'
-
-/** Called by `PublicStoreLayout` whenever a store page renders. */
-export function rememberLastStore(slug: string) {
-  try {
-    sessionStorage.setItem(LAST_STORE_KEY, slug)
-  } catch {
-    /* storage blocked — cart simply stays neutral */
-  }
-}
-
-export function lastVisitedStore(): string | null {
-  try {
-    return sessionStorage.getItem(LAST_STORE_KEY)
-  } catch {
-    return null
-  }
-}
-
-/**
- * Which store should theme the /cart overview:
- *   one store in the cart      → that store (unambiguous);
- *   several stores             → the last-visited one when it's among them,
- *                                else the first group (stable, predictable);
- *   empty cart                 → the last-visited store, so a visitor who
- *                                just left a storefront stays in its world.
- */
-export function cartThemeSlug(storeSlugs: string[]): string | null {
-  if (storeSlugs.length === 1) return storeSlugs[0]!
-  const last = lastVisitedStore()
-  if (last && (storeSlugs.length === 0 || storeSlugs.includes(last))) {
-    return last
-  }
-  return storeSlugs[0] ?? last
-}
+// NOTE: /cart themes itself by the store the visitor OPENED it from, carried
+// explicitly in the URL as `?from={slug}` by every cart link inside a store
+// (`cartUrl` in storesApi.ts). Opened from the marketplace (plain /cart) it
+// stays neutral. The context deliberately lives in the URL and NOT in
+// storage: a sessionStorage "last visited store" heuristic existed here once
+// and was removed — ambient tracking breaks on back/forward-cache restores
+// (effects don't re-run) and multiple tabs, while a URL param survives all
+// of that as part of browser history.

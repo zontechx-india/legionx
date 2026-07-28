@@ -1,8 +1,9 @@
 import { z } from "zod";
+import { paginationQuery } from "../../utils/zodHelpers.js";
 
 /**
- * Marketplace discovery surface (`/api/v1/public/search`, `/public/stats`) —
- * platform-wide, anonymous, read-only.
+ * Marketplace discovery surface (`/api/v1/public/search`, `/public/products`,
+ * `/public/stats`) — platform-wide, anonymous, read-only.
  */
 
 /**
@@ -16,3 +17,13 @@ export const searchQuerySchema = z.object({
 });
 
 export type SearchQuery = z.infer<typeof searchQuerySchema>;
+
+/**
+ * Platform-wide product rail (`GET /public/products`) — newest visible
+ * products across all published stores (the homepage "Fresh Finds" row).
+ * Recency-only by design: no popularity/analytics sort exists yet, so the
+ * only order is newest-first and the schema stays pagination-only.
+ */
+export const newProductsQuerySchema = paginationQuery;
+
+export type NewProductsQuery = z.infer<typeof newProductsQuerySchema>;

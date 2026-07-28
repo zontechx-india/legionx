@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import {
+  cartUrl,
   publicStoreUrl,
   storeCategoryUrl,
   storeHomeUrl,
@@ -110,7 +111,7 @@ export function StoreHeader({
         />
 
         {/* Cart */}
-        <CartButton skin={skin} />
+        <CartButton skin={skin} storeSlug={store.slug} />
       </div>
 
       {drawerOpen && (
@@ -390,13 +391,14 @@ function SearchBox({ store, skin }: { store: PublicStore; skin: Skin }) {
   )
 }
 
-function CartButton({ skin }: { skin: Skin }) {
+function CartButton({ skin, storeSlug }: { skin: Skin; storeSlug: string }) {
   const items = useCart()
   const count = items.reduce((sum, item) => sum + item.qty, 0)
 
   return (
     <a
-      href="/cart"
+      // ?from= makes the cart continue THIS store's theme (see cartUrl).
+      href={cartUrl(storeSlug)}
       aria-label={`Cart, ${count} item${count === 1 ? '' : 's'}`}
       className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${skin.border} ${skin.chip} transition hover:opacity-80`}
     >

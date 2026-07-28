@@ -90,6 +90,17 @@ export const customerAuth = {
     return call<CustomerLogin>(http.post(`${AUTH}/web/otp/verify`, input))
   },
 
+  // Identifier linking — add the missing identifier (a mobile number, or an
+  // email for OTP-only accounts) to the signed-in account, verified by a code
+  // sent to that new identifier. 409 if it's already linked to any account —
+  // a number/email can only ever belong to one account.
+  linkRequest(input: { phone: string } | { email: string }) {
+    return call<CodeSent>(http.post(`${AUTH}/me/link/request`, input))
+  },
+  linkVerify(input: ({ phone: string } | { email: string }) & { code: string }) {
+    return call<Customer>(http.post(`${AUTH}/me/link/verify`, input))
+  },
+
   // Session
   me() {
     return call<Customer>(http.get(`${AUTH}/me`))

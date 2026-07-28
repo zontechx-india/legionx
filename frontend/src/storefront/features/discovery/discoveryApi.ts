@@ -9,7 +9,7 @@ import type { ListMeta } from '../../../shared/auth/http'
 
 const PUBLIC = '/api/v1/public'
 
-/** A store as a marketplace card needs it — branding only, never catalog. */
+/** A store as a marketplace card needs it — branding + a taste of catalog. */
 export interface MarketStore {
   id: string
   name: string
@@ -17,6 +17,23 @@ export interface MarketStore {
   logoUrl: string | null
   /** Stamped on first publish; drives the "New Stores" ordering. */
   publishedAt: string | null
+  /** Publicly visible products in the store. */
+  productCount: number
+  /** Cover images of the newest visible products (max 4) — the card strip. */
+  previewImages: string[]
+}
+
+/** A product on the platform-wide "Fresh Finds" rail (same shape as search hits). */
+export interface MarketProduct {
+  id: string
+  name: string
+  slug: string
+  /** "From" price (cheapest sellable variant). Decimal on the wire. */
+  price: string | null
+  stockQuantity: number
+  categoryName: string
+  store: { name: string; slug: string }
+  image: { url: string | null; altText: string | null } | null
 }
 
 export interface SearchStoreHit {
@@ -54,9 +71,17 @@ export interface SearchResults {
   products: SearchProductHit[]
 }
 
+/** A "Shop by Category" chip — aggregated category name across stores. */
+export interface PopularCategory {
+  name: string
+  count: number
+}
+
 export interface PlatformStats {
   stores: number
   products: number
+  /** Orders placed platform-wide (cancelled excluded). */
+  orders: number
 }
 
 export const discoveryApi = {
@@ -77,6 +102,19 @@ export const discoveryApi = {
   async search(q: string, limit = 5): Promise<SearchResults> {
     const params = new URLSearchParams({ q, limit: String(limit) })
     return call<SearchResults>(http.get(`${PUBLIC}/search?${params}`))
+  },
+
+  /** Newest discoverable products platform-wide (homepage "Fresh Finds"). */
+  async listNewProducts(pageSize = 12): Promise<MarketProduct[]> {
+    const { items } = await callList<MarketProduct>(
+      http.get(`${PUBLIC}/products?pageSize=${pageSize}`),
+    )
+    return items
+  },
+
+  /** Most common category names across published stores (homepage chips). */
+  async popularCategories(): Promise<PopularCategory[]> {
+    return call<PopularCategory[]>(http.get(`${PUBLIC}/categories`))
   },
 
   /** Marketplace trust counters. */

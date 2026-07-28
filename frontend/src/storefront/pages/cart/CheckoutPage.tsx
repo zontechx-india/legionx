@@ -11,6 +11,7 @@ import { useCartRevalidation } from '../../features/cart/useCartRevalidation'
 import { storeVars } from '../../features/publicStore/storeTheme'
 import { useStoreShell } from '../../features/publicStore/useStoreShells'
 import {
+  cartUrl,
   formatPrice,
   publicOrderApi,
   storeHomeUrl,
@@ -117,7 +118,8 @@ export function CheckoutPage({ storeSlug }: { storeSlug: string }) {
       <header className="sticky top-0 z-40 border-b border-line bg-bg/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1920px] items-center gap-3 px-4 py-3 sm:px-6 lg:px-10">
           <Link
-            to="/cart"
+            // Keep this store's theme when going back to the combined cart.
+            to={cartUrl(storeSlug)}
             aria-label="Back to cart"
             className="flex h-10 w-10 items-center justify-center rounded-full text-muted transition hover:bg-surface-alt"
           >
@@ -302,7 +304,7 @@ function SignInToOrder({ storeSlug }: { storeSlug: string }) {
       </p>
       <div className="mt-5 flex gap-3">
         <Link
-          to="/cart"
+          to={cartUrl(storeSlug)}
           className="rounded-md border border-line px-5 py-2.5 text-sm font-semibold text-fg transition hover:bg-surface-alt"
         >
           Back to cart
@@ -375,7 +377,7 @@ function NothingToOrder({
       </p>
       <div className="mt-5 flex gap-3">
         <Link
-          to="/cart"
+          to={cartUrl(storeSlug)}
           className="rounded-md border border-line px-5 py-2.5 text-sm font-semibold text-fg transition hover:bg-surface-alt"
         >
           Back to cart

@@ -1370,6 +1370,16 @@ export const sellerOrderApi = {
 
 // --- Storefront URL builders (one place that knows the route shape) --------
 
+/**
+ * The combined cart. `from` is the slug of the store the visitor opens the
+ * cart FROM — carried as `?from=` so /cart can continue that store's theme.
+ * The context lives in the URL (not storage) on purpose: history back/
+ * forward, refresh and multiple tabs all restore the right theme for free.
+ * Omit it from marketplace surfaces — the cart then renders neutral.
+ */
+export const cartUrl = (from?: string | null) =>
+  from ? `/cart?from=${encodeURIComponent(from)}` : '/cart'
+
 export const storeHomeUrl = (storeSlug: string) => `/store/${storeSlug}`
 export const storeCategoryUrl = (storeSlug: string, categorySlug: string) =>
   `/store/${storeSlug}/category/${categorySlug}`

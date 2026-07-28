@@ -91,7 +91,8 @@ export function AccountMenu() {
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 transition-colors hover:bg-surface-alt sm:pl-3"
       >
-        <span className="hidden text-sm font-medium text-fg sm:block">
+        {/* Single line always — long names truncate, never wrap the bar. */}
+        <span className="hidden max-w-36 truncate whitespace-nowrap text-sm font-medium text-fg sm:block">
           {name}
         </span>
         <Avatar customer={customer} className="h-9 w-9" />

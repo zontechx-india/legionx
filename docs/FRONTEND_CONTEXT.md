@@ -52,7 +52,7 @@ Auth talks to the live backend (`package/auth`) via `src/shared/auth/`:
 | File | Purpose |
 | ---- | ------- |
 | `http.ts`    | Axios client: `withCredentials`, echoes the `csrf_token` cookie in `X-CSRF-Token` on mutations, normalizes the error envelope into `ApiError` |
-| `authApi.ts` | Typed endpoints: `customerAuth` (register, login, google, requestOtp/verifyOtp, forgot/resetPassword, me, refresh, logout) + `adminAuth` (login, me, refresh, logout) + `resolveSession` |
+| `authApi.ts` | Typed endpoints: `customerAuth` (register, login, google, requestOtp/verifyOtp, forgot/resetPassword, linkRequest/linkVerify, me, refresh, logout) + `adminAuth` (login, me, refresh, logout) + `resolveSession` |
 | `useSession.ts` | Session hook: on mount probes `/me` (one refresh retry on 401) → `loading / guest / authed`; exposes `signedIn(user)` / `signOut()` |
 
 Both frontends are **web** clients: tokens live in httpOnly cookies (never JS),
@@ -73,7 +73,9 @@ forgot password and reset — since Mobile OTP cannot create an account:
   in place, ready to re-enable when the real integration is planned (the
   backend currently has **no Google verifier registered** either — its
   `/google` endpoints answer 400).
-- **Mobile OTP** — **login-only**: phone → 6-digit code, for numbers already
+- **Mobile OTP** — **login-only**: phone → SMS code (4 digits from the real
+  Message Central delivery, 6 from the dev fallback/bypass — the inputs
+  accept 4–8 and never hardcode a length), for numbers already
   linked to an account from the profile (unlinked numbers get a clear 404
   message). Dev responses include `devCode` (**123456**), surfaced as hints.
 
@@ -106,17 +108,47 @@ for guests and signed-in customers alike and adapts per session state.
   don't exist in the marketplace router, so a client-side navigate would
   hit its catch-all.
 - **`pages/HomePage.tsx`** (marketplace, replaces the old dashboard landing):
-  own chrome (sticky header: brand · theme toggle · cart link with count ·
+  own chrome (sticky header: brand · **global search centered in the
+  toolbar** on md+, dropping to its own row under the bar below md ·
+  "Sell on Unie Max" link (lg+) · theme toggle · cart link with count ·
   Sign in / `AccountMenu`), **full-bleed** like the storefront
-  (`max-w-[1920px]` soft cap, `lg:px-10`; card grids run 2→3→4→5 columns),
-  then hero + **global search**, **New Stores**,
-  **Recently Viewed** (local, hidden when empty), **My Stores** (owners
-  only), a **Become a Seller** gradient panel (label flips to "Create
-  Another Store" for owners; guests route through `/login?next=/stores/new`)
-  and **Platform Stats** (hidden while the platform has 0 published stores —
-  a zero would undermine the trust the section exists to build), plus a
-  footer (About / Privacy / Terms / Support / Contact →
-  `pages/InfoComingSoonPage.tsx`, public placeholders). Every section
+  (`max-w-[1920px]` soft cap, `lg:px-10`; card grids run 2→3→4→5 columns).
+  Sections render as **full-bleed alternating bands** (base canvas / `alt`
+  surface tone + a bottom `border-line` divider, compact `py-8/10`) — the
+  band lives inside each section component so a hidden section leaves no
+  empty band; separation comes from background changes rather than large
+  gaps. Sections, in order: a **left-aligned hero band** (headline + Start
+  Shopping anchor → #new-stores + Open Your Store; on lg+ a two-column
+  offset **collage of real product covers**, adapting from 2 covers up
+  (max 4) — decorative, fed by the same fetch as Fresh Finds); a **Shop
+  by Category
+  chip strip** (`GET /public/categories` — most common category names
+  across stores; tapping a chip pre-fills and focuses the global search
+  via a tiny module-level search-intent bus; the strip renders nothing
+  while loading/failed/empty); **New Stores**
+  (merchandise-first cards: 3-tile preview strip of product covers from
+  the API's `previewImages`, then logo · Oswald name · `productCount` —
+  no raw slugs, no per-card CTA, the whole card is the link);
+  **Fresh Finds** (`GET /public/products`, newest 12 platform-wide,
+  product cards with image / store / name / price on a denser grid than
+  the store cards — 2→3→4→5→6 columns, 4-up from `lg`; section hides while
+  the platform has no products — one shared `useNewProducts()` fetch
+  feeds it and the hero collage, the rail owning the error/retry UI);
+  **Recently Viewed** (local, hidden when empty, logo + name pills);
+  **My Stores** (owners only, compact wrapping row — logo, body-face
+  name, Published/Draft chip — deliberately slim so consumer sections
+  keep the prime real estate; these pill rows and the category strip
+  all **wrap** rather than scroll horizontally — no scrollbars on the
+  homepage); and a **Become a Seller** gradient panel
+  (split layout: pitch + 3 check-mark proof points + CTA on the left —
+  label flips to "Create Another Store" for owners; guests route through
+  `/login?next=/stores/new` — and the live **platform counters**
+  (Stores / Products / Orders from `GET /public/stats`) on the right as
+  social proof; counters fail silently and any zero value hides). The
+  **footer** is a structured 4-column block: brand + tagline, Marketplace
+  (About / Support / Contact) and Legal (Privacy / Terms) columns
+  (→ `pages/InfoComingSoonPage.tsx`, public placeholders), and a Sell on
+  Unie Max column with a Become a Seller button. Every section still
   fetches independently with its own skeleton and retry — one failed API
   never blanks the page.
 - **Global search** (`features/discovery/discoveryApi.ts` →
@@ -126,51 +158,67 @@ for guests and signed-in customers alike and adapts per session state.
   to `/store/{slug}`, `…/category/{slug}`, `…/product/{slug}` (full page
   loads — the shopping surface lives in the public router). Category and
   product rows show their owning store ("in Power Sports"). Enter opens the
-  first hit; Escape/outside-tap closes.
+  first hit; Escape/outside-tap closes. The box lives in the sticky header,
+  so it stays reachable while scrolling; focusing it while empty opens the
+  dropdown with recent-search chips.
 - **Local memory** (`features/discovery/recentActivity.ts`, localStorage +
   `useSyncExternalStore`, cross-tab): recent searches
   (`uniemax.recentSearches`, cap 8, saved when a result is opened, shown as
-  chips under the hero search) and recently viewed stores
-  (`uniemax.recentStores`, cap 8 `{slug,name,logoUrl}` snapshots, recorded
+  chips in the search dropdown while the field is empty) and recently
+  viewed stores
+  (`uniemax.recentStores`, cap 12 `{slug,name,logoUrl}` snapshots — the
+  homepage section displays at most the same 12 — recorded
   by `PublicStoreLayout` for **published** stores only — a draft preview is
   not a shopping visit).
 - **New Stores** rail — `GET /api/v1/public/stores` (newest publish first,
-  `pageSize=12`); empty state invites the visitor to be the first seller.
-  **Platform Stats** — `GET /api/v1/public/stats`.
+  `pageSize=12`, cards use its `productCount` + `previewImages`); empty
+  state invites the visitor to be the first seller. **Fresh Finds** —
+  `GET /api/v1/public/products`. **Category chips** —
+  `GET /api/v1/public/categories`. **Platform counters** —
+  `GET /api/v1/public/stats` (rendered inside the Become a Seller panel).
+  The footer's bottom bar carries a trust row (COD available · Secure
+  checkout).
 
 ### Storefront account shell (routed dashboard)
 
 Signed-in account pages mount inside `RequireCustomer` → `AppLayout`
 (`storefront/app/router.tsx`):
 
-- **`layout/AppLayout.tsx`** — responsive shell (Facebook-style chrome: gray
-  canvas, white surfaces): fixed sidebar on lg+ — the top-bar hamburger
-  toggles it between full width (264px) and an icon-only rail (72px,
-  tooltips on hover; remembered in localStorage) — slide-in drawer below lg
-  (same hamburger), plus a sticky top bar on all breakpoints (rounded
-  product-search field on md+ — UI only until the catalog lands — and the
-  customer's avatar/name). Pages render into `<Outlet/>` inside a
-  **full-width** container (`max-w-[1920px]`, a soft cap for ultrawides —
-  matching the storefront); form-heavy pages constrain themselves
-  (`CreateStorePage` `max-w-lg`, `StoreManageLayout` `max-w-7xl`, section
-  forms `max-w-xl`).
-- **Account menu** (`layout/AccountMenu.tsx`) — Flipkart-style dropdown on the
-  top-bar avatar: opens on hover (click/tap on touch), closes on Escape /
-  outside tap / item click. Items come from `ACCOUNT_MENU_ITEMS` in
-  `app/navigation.ts` (My Profile, Orders, Saved Addresses, Favourites) plus a
-  Logout row using the shared confirm flow (`layout/useSignOutConfirm.ts`,
-  also used by the sidebar's ProfileSection).
-- **Sidebar** (`layout/Sidebar.tsx`) — brand, config-driven nav
-  (`app/navigation.ts` is the single source of truth for links/icons), and a
-  **profile section pinned to the bottom** (`layout/ProfileSection.tsx`):
-  avatar/initial, name, contact, and a logout button. Logout always goes
-  through a **confirmation dialog** (`shared/ui/ConfirmDialog.tsx`, reusable);
-  only on confirm is the session revoked server-side.
+- **`layout/AppLayout.tsx`** — the authed shell is a **sticky top bar only**
+  (brand → `/`, theme toggle, account menu); the old sidebar/drawer was
+  removed — it duplicated the account menu. Pages render into `<Outlet/>`
+  inside a **full-width** container (`max-w-[1920px]`, a soft cap for
+  ultrawides — matching the storefront); form-heavy pages constrain
+  themselves (`CreateStorePage` `max-w-lg`, `StoreManageLayout` `max-w-7xl`,
+  section forms `max-w-xl`).
+- **Account menu** (`layout/AccountMenu.tsx`) — the ONE place account
+  navigation lives: Flipkart-style dropdown on the top-bar avatar, opens on
+  hover (click/tap on touch), closes on Escape / outside tap / item click.
+  Items come from `ACCOUNT_MENU_ITEMS` in `app/navigation.ts` (My Profile,
+  Orders, Saved Addresses) plus the dynamic store row and a Logout row using
+  the shared confirm flow (`layout/useSignOutConfirm.ts`); Logout always
+  goes through `shared/ui/ConfirmDialog.tsx` — only on confirm is the
+  session revoked server-side. The trigger's name is single-line and
+  truncates past `max-w-36`.
 - **Session context** (`app/sessionContext.ts` + `app/SessionProvider.tsx`) —
   provides `{ customer, signOut }` to the authed tree via
   `useCustomerSession()`; no prop drilling.
-- **Pages are lazy routes** (one chunk per page): `ComingSoonPage`
-  placeholders for `/wishlist`, `/settings`, `/profile`.
+- **Pages are lazy routes** (one chunk per page — the `/wishlist` and
+  `/settings` placeholder routes were removed until those features are
+  actually built). `/profile` is the real **My Profile** page
+  (`ProfilePage.tsx`): identity card (avatar, name, member-since) and a
+  **Sign-in details** card listing the account's identifiers — email (with a
+  Verified chip) and mobile number. When no phone is linked it offers the
+  **mobile-number linking flow** (CONTEXT.md "Account Linking"): enter the
+  number → `POST /auth/me/link/request` texts an OTP (`devCode` hint shown in
+  dev) → entering the code hits `POST /auth/me/link/verify`, which links the
+  number verified and returns the updated customer — pushed into the session
+  via `useMarketSession().signedIn()` so the whole authed tree updates, and
+  the number then works as an OTP sign-in method on `/login`. A number
+  already on another account is rejected by the backend with a 409 (one
+  number = one account), surfaced inline. Once linked the row is read-only
+  with a Verified chip (identifiers change only via verified linking, never
+  a plain edit); an `altPhone` row shows when set (contact-only).
   `/orders` is the real **My Orders** page (`OrdersPage.tsx` over
   `GET /api/v1/orders`): one card per order — order number, date, store
   link, status chip (Placed/Confirmed/…/Delivered/Cancelled), payment chip
@@ -384,15 +432,20 @@ store card shows the store's **logo** (fetched via
 first 3 lines, with a "View N more items" link to
 **`/cart/{storeSlug}`** (`pages/cart/CartStorePage.tsx`), the dedicated
 all-items page for that store (plus Clear all and its own Place Order).
-**Theming rule:** every cart page **continues a store's theme**
-(`storeVars` once the shell loads), so a customer arriving from a dark
-storefront stays in the store's world. Store-scoped pages
-(`/cart/{slug}`, `/checkout/{slug}`) use that store's theme directly; the
-multi-store `/cart` overview picks one via `cartThemeSlug`: the cart's
-only store, else the **last-visited store** (recorded by
-`PublicStoreLayout` in sessionStorage, `uniemax.lastStore`) when it's in
-the cart, else the first group — and an empty cart keeps the last-visited
-store's theme. Neutral palette only when no store is known. All pages use
+**Theming rule:** the cart continues the theme of the store the customer
+**opened it from**, carried **explicitly in the URL**: every cart link
+inside a store points at `/cart?from={storeSlug}` (built by `cartUrl()` in
+`storesApi.ts` — used by the store header's cart button, the added-to-cart
+toast, and the store-scoped cart/checkout pages' back links), and `/cart`
+applies that store's theme regardless of which stores' items are inside.
+Opened from the marketplace (homepage — plain `/cart`, no `from`) it
+renders the neutral palette that follows the visitor's light/dark toggle.
+Store-scoped pages (`/cart/{slug}`, `/checkout/{slug}`, the order page)
+always use their own store's theme directly (`useStoreShell`). The context
+deliberately lives in the URL and **not in storage** (a sessionStorage
+"last-visited store" heuristic existed and was removed): a URL param is
+part of browser history, so back/forward-cache restores, refreshes and
+multiple tabs all keep the right theme, where ambient tracking broke. All pages use
 the storefront treatment (full-width shell, flat surface+border cards,
 Oswald headings, sticky top bar) with an order-summary panel stuck beside
 the list on desktop.
@@ -676,15 +729,13 @@ frontend/
     │   ├── app/
     │   │   ├── router.tsx        # Marketplace router: public / + /login + guarded account subtree
     │   │   ├── publicRouter.tsx  # Public storefront + cart routes (no sign-in)
-    │   │   ├── navigation.ts     # Sidebar nav config (single source of truth)
+    │   │   ├── navigation.ts     # Account-menu nav config (single source of truth)
     │   │   ├── marketSession.tsx # Whole-session context (loading/guest/authed) + provider
     │   │   ├── RequireCustomer.tsx # Route guard: guest → /login?next=…, authed → SessionProvider
     │   │   ├── sessionContext.ts # CustomerSession context + useCustomerSession()
     │   │   └── SessionProvider.tsx # Provides { customer, signOut } to the tree
     │   ├── layout/
-    │   │   ├── AppLayout.tsx     # Shell: sidebar rail (lg+) / drawer (mobile) + Outlet
-    │   │   ├── Sidebar.tsx       # Brand + nav + profile pinned bottom
-    │   │   ├── ProfileSection.tsx# Avatar/name + logout w/ confirmation dialog
+    │   │   ├── AppLayout.tsx     # Authed shell: sticky top bar + Outlet (no sidebar)
     │   │   ├── AccountMenu.tsx   # Top-bar avatar dropdown (account links + logout)
     │   │   ├── useSignOutConfirm.ts # Shared confirm-then-sign-out flow
     │   │   ├── Avatar.tsx        # Photo or initial fallback (header + profile)
@@ -694,7 +745,7 @@ frontend/
     │   │   │   ├── addressesApi.ts # Typed client for /api/v1/addresses
     │   │   │   └── AddressForm.tsx # Shared add/edit form (Saved Addresses + checkout)
     │   │   ├── discovery/        # Marketplace homepage data layer
-    │   │   │   ├── discoveryApi.ts # /public/stores (New Stores) · /public/search · /public/stats
+    │   │   │   ├── discoveryApi.ts # /public/stores · /public/products · /public/search · /public/categories · /public/stats
     │   │   │   └── recentActivity.ts # localStorage recent searches + recently viewed stores
     │   │   ├── cart/
     │   │   │   ├── cart.ts       # Client-side cart: localStorage store + hooks + sync()
@@ -720,9 +771,9 @@ frontend/
     │   └── pages/
     │       ├── LoginPage.tsx     # Email+password · Google (dev) · phone OTP
     │       ├── LoginRoute.tsx    # /login route: ?next= handling + already-authed redirect
-    │       ├── HomePage.tsx      # Marketplace homepage: search, New Stores, My Stores, seller CTA, stats
+    │       ├── HomePage.tsx      # Marketplace homepage: hero+collage, New Stores, Fresh Finds, seller CTA
     │       ├── InfoComingSoonPage.tsx # Public placeholder for /about /privacy /terms /support /contact
-    │       ├── ComingSoonPage.tsx# Placeholder for /orders /wishlist /settings…
+    │       ├── ProfilePage.tsx   # /profile — account details + mobile-number linking (SMS OTP)
     │       ├── AddressesPage.tsx # /addresses — saved delivery addresses (one primary)
     │       ├── OrdersPage.tsx    # /orders — the customer's order history
     │       ├── store/            # Public storefront pages (no sign-in)
@@ -1008,7 +1059,8 @@ Other scripts: `npm run build` (typecheck + build both), `npm run preview`
    button once `GOOGLE_CLIENT_ID` is decided (same `customerAuth.google()` call).
 4. Account section UI for the remaining auth self-service (change/set password,
    phone/email linking — endpoints already live) and the remaining account
-   placeholders (`/wishlist`, `/settings`, `/profile`).
+   placeholder (`/profile`). Wishlist/settings return as routes only when
+   the features are actually built.
 5. Shipping-charge rules (fixed/district/state — orders currently ship
    free) and customer-side order tracking/cancellation.
 

@@ -288,12 +288,14 @@ A single account can own multiple stores and switch between them.
   the cart **refreshes prices and stock** against the live catalog (stale
   quantities clamp down, and items no longer sold are flagged unavailable
   instead of silently vanishing). Quantities are capped by stock.
-  **Theming:** the cart continues the store's look rather than snapping to
-  a default palette — the per-store pages (`/cart/{storeSlug}` and the
-  order page) use that store's theme directly, and the combined `/cart`
-  overview themes itself by the cart's only store or, with several stores,
-  by the one the customer visited most recently (falling back to the first
-  in the cart). A neutral palette shows only when no store is known.
+  **Theming:** the cart continues the look of the store the customer
+  opened it from — every cart link inside a store carries that store's
+  identity, and the combined `/cart` overview wears that store's theme
+  even when the items inside belong to other stores. Opened from the
+  marketplace homepage instead, the cart uses the marketplace's neutral
+  palette (respecting the customer's light/dark choice). Pages that belong
+  to a single store — `/cart/{storeSlug}`, the checkout and the order
+  page — always use that store's theme directly.
 - **Place Order (per store)** — orders are placed per store, so each cart
   group's Place Order button opens `/checkout/{storeSlug}`. **Placing an
   order requires a signed-in customer** (enforced by the API): browsing

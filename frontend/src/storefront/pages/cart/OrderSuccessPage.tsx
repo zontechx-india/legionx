@@ -1,0 +1,212 @@
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { usePageTitle } from '../../../shared/usePageTitle'
+import { storeVars } from '../../features/publicStore/storeTheme'
+import { useStoreShell } from '../../features/publicStore/useStoreShells'
+import {
+  formatPrice,
+  publicOrderApi,
+  storeHomeUrl,
+} from '../../features/stores/storesApi'
+import type { PlacedOrder } from '../../features/stores/storesApi'
+import {
+  BoxIcon,
+  CheckIcon,
+  ChevronRightIcon,
+  MapPinIcon,
+  PhoneCallIcon,
+} from '../../layout/icons'
+
+/**
+ * Order confirmation (/order/{storeSlug}/{orderId}) — where a successful
+ * Place Order lands. Fetches the order by its unguessable id (guest-friendly,
+ * no account needed) and keeps the store's theme, so the celebration still
+ * feels like the shop the customer just bought from.
+ */
+export function OrderSuccessPage({
+  storeSlug,
+  orderId,
+}: {
+  storeSlug: string
+  orderId: string
+}) {
+  const shell = useStoreShell(storeSlug)
+  const [order, setOrder] = useState<PlacedOrder | null | undefined>(undefined)
+  usePageTitle('Order Placed', order?.storeName ?? shell?.name)
+
+  useEffect(() => {
+    let cancelled = false
+    setOrder(undefined)
+    publicOrderApi
+      .get(storeSlug, orderId)
+      .then((found) => {
+        if (!cancelled) setOrder(found)
+      })
+      .catch(() => {
+        if (!cancelled) setOrder(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [storeSlug, orderId])
+
+  return (
+    <div
+      className="flex min-h-screen flex-col bg-bg text-fg"
+      style={shell ? storeVars(shell.theme) : undefined}
+    >
+      <main className="mx-auto w-full max-w-[720px] flex-1 px-4 py-10 sm:px-6">
+        {order === undefined && (
+          <p className="py-24 text-center text-sm text-muted">
+            Loading your order…
+          </p>
+        )}
+
+        {order === null && (
+          <div className="flex flex-col items-center rounded-xl border border-line bg-surface px-6 py-16 text-center">
+            <h1 className="font-body text-lg font-semibold tracking-normal">
+              Order not found
+            </h1>
+            <p className="mt-1.5 max-w-sm text-sm text-muted">
+              This order link doesn't exist. Double-check the link, or head
+              back to the store.
+            </p>
+            <Link
+              to={storeHomeUrl(storeSlug)}
+              className="metal-cta mt-5 rounded-md px-5 py-2.5 text-sm font-semibold text-cta-contrast transition"
+            >
+              Back to the store
+            </Link>
+          </div>
+        )}
+
+        {order && (
+          <>
+            {/* The confirmation moment */}
+            <div className="flex flex-col items-center text-center">
+              <span className="flex h-16 w-16 items-center justify-center rounded-full bg-success/10 text-success">
+                <CheckIcon className="h-8 w-8" />
+              </span>
+              <h1 className="mt-4 font-body text-2xl font-semibold tracking-normal">
+                Order placed!
+              </h1>
+              <p className="mt-1 text-sm text-muted">
+                Thanks{order.customerName ? `, ${order.customerName}` : ''} —{' '}
+                {order.storeName} has received your order.
+              </p>
+              <p className="mt-3 rounded-pill border border-line bg-surface px-4 py-1.5 text-sm font-bold tracking-wide">
+                {order.orderNumber}
+              </p>
+              <p className="mt-2 text-xs font-semibold text-muted">
+                {order.paymentMethod === 'ONLINE'
+                  ? order.paymentStatus === 'PAID'
+                    ? `Paid online${order.paymentRef === 'DEV-SIMULATED' ? ' (simulated — development build)' : ''}`
+                    : 'Online payment pending'
+                  : 'Pay on delivery'}
+              </p>
+            </div>
+
+            {/* What was ordered */}
+            <section className="mt-8 rounded-xl border border-line bg-surface">
+              <h2 className="border-b border-line px-5 py-3.5 font-body text-base font-semibold tracking-normal">
+                Your Items
+              </h2>
+              <ul className="divide-y divide-line px-5">
+                {order.items.map((item) => (
+                  <li key={item.id} className="flex items-center gap-3 py-3.5">
+                    {item.imageUrl ? (
+                      <img
+                        src={item.imageUrl}
+                        alt={item.productName}
+                        loading="lazy"
+                        decoding="async"
+                        className="h-12 w-12 shrink-0 rounded-md border border-line object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-surface-alt text-muted">
+                        <BoxIcon className="h-5 w-5" />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">
+                        {item.productName}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted">
+                        {item.variantName && (
+                          <span className="mr-2 rounded-sm bg-surface-alt px-1.5 py-0.5 font-semibold">
+                            {item.variantName}
+                          </span>
+                        )}
+                        {item.quantity} × {formatPrice(item.unitPrice)}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-sm font-bold">
+                      {formatPrice(item.lineTotal)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <div className="flex items-center justify-between border-t border-line px-5 py-3.5">
+                <span className="text-sm font-semibold text-muted">Total</span>
+                <span className="text-lg font-bold">
+                  {formatPrice(order.total)}
+                </span>
+              </div>
+            </section>
+
+            {/* Where it's going */}
+            <section className="mt-4 rounded-xl border border-line bg-surface p-5">
+              <h2 className="flex items-center gap-2 font-body text-base font-semibold tracking-normal">
+                <MapPinIcon className="h-4.5 w-4.5 text-muted" />
+                {order.fulfilment === 'PICKUP' ? 'Store Pickup' : 'Delivery'}
+              </h2>
+              <div className="mt-2 text-sm text-muted">
+                {order.fulfilment === 'PICKUP' ? (
+                  <p>
+                    Collect your order from {order.storeName} — the seller
+                    will confirm when it's ready.
+                  </p>
+                ) : (
+                  <p className="whitespace-pre-line">
+                    {[
+                      order.customerName,
+                      order.addressLine,
+                      [order.state, order.pincode].filter(Boolean).join(' '),
+                      order.country,
+                    ]
+                      .filter(Boolean)
+                      .join('\n')}
+                  </p>
+                )}
+                {order.customerPhone && (
+                  <p className="mt-2 flex items-center gap-1.5 text-xs">
+                    <PhoneCallIcon className="h-3.5 w-3.5" />
+                    {order.customerPhone}
+                  </p>
+                )}
+              </div>
+            </section>
+
+            <div className="mt-6 flex flex-col gap-2.5 sm:flex-row sm:justify-center">
+              <Link
+                to={storeHomeUrl(order.storeSlug)}
+                className="metal-cta flex h-11 items-center justify-center gap-1 rounded-md px-6 text-sm font-bold text-cta-contrast transition"
+              >
+                Continue shopping
+                <ChevronRightIcon className="h-4 w-4" />
+              </Link>
+              {/* Plain <a>: "/" lives in the MARKETPLACE router — crossing
+                  routers requires a full page load, a Link would 404. */}
+              <a
+                href="/"
+                className="flex h-11 items-center justify-center rounded-md border border-line px-6 text-sm font-semibold text-muted transition hover:bg-surface-alt hover:text-fg"
+              >
+                Back to Unie Max
+              </a>
+            </div>
+          </>
+        )}
+      </main>
+    </div>
+  )
+}

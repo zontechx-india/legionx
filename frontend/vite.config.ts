@@ -49,6 +49,15 @@ export default defineConfig({
   server: {
     // Accept requests for *.localhost subdomains.
     host: true,
+    // Same-origin API in dev: the SPA calls `/api/...` and Vite forwards to the
+    // backend, so httpOnly auth cookies work without any CORS/SameSite setup —
+    // matching production, where nginx serves the SPA and API from one domain.
+    proxy: {
+      '/api': 'http://localhost:4000',
+      // Media served by the backend's local storage driver in dev (S3/CDN
+      // absolute URLs bypass this entirely).
+      '/uploads': 'http://localhost:4000',
+    },
   },
   build: {
     rollupOptions: {

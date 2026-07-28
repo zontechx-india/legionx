@@ -1,4 +1,7 @@
 import { useState } from 'react'
+import { adminAuth } from '../../shared/auth/authApi'
+import type { Admin } from '../../shared/auth/authApi'
+import { AppLogoMark } from '../../shared/ui/AppLogo'
 import {
   AuthLayout,
   Hero,
@@ -6,37 +9,52 @@ import {
   Brand,
   TextField,
   PrimaryButton,
+  ErrorNote,
+  MailIcon,
+  LockIcon,
+  EyeIcon,
 } from '../../shared/ui/form'
 
 /**
- * Admin login — email + password.
+ * Admin login — email + password against the real backend
+ * (POST /api/v1/admin/auth/web/login → httpOnly cookie session).
  *
- * API integration is intentionally deferred. The `// TODO(api)` point below is
- * where the backend call goes:
- *   - sign in → POST /api/v1/admin/auth/login  { email, password }
- *     → store the returned admin JWT, then redirect to the dashboard.
+ * No self-service reset by design: admin accounts are provisioned/reset via
+ * `npm run create-admin` on the backend.
  */
-export function LoginPage() {
+export function LoginPage({ onSignedIn }: { onSignedIn: (admin: Admin) => void }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
 
-  function signIn(e: React.FormEvent) {
+  async function signIn(e: React.FormEvent) {
     e.preventDefault()
-    // TODO(api): authenticate, store token, redirect to dashboard.
+    setError('')
+    setBusy(true)
+    try {
+      const { admin } = await adminAuth.login({ email, password })
+      onSignedIn(admin)
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
     <AuthLayout
       hero={<AdminHero />}
       footer={
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-muted">
           Authorized personnel only · admin.shop.example.com
         </p>
       }
     >
       <Brand
-        badge="⚙"
-        badgeClass="bg-gray-900"
+        badge={<AppLogoMark className="h-14 w-14" />}
+        badgeClass=""
         title="Admin Console"
         subtitle="Sign in to manage your store"
       />
@@ -47,30 +65,36 @@ export function LoginPage() {
             label="Email"
             type="email"
             placeholder="admin@store.com"
+            icon={<MailIcon />}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             autoFocus
           />
-          <div>
-            <TextField
-              label="Password"
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-            <div className="mt-1.5 text-right">
+          <TextField
+            label="Password"
+            type={showPassword ? 'text' : 'password'}
+            placeholder="••••••••"
+            icon={<LockIcon />}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            trailing={
               <button
                 type="button"
-                className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                onClick={() => setShowPassword((s) => !s)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                className="flex h-8 w-8 items-center justify-center rounded-md text-muted transition hover:bg-surface-alt hover:text-fg"
               >
-                Forgot password?
+                <EyeIcon off={showPassword} />
               </button>
-            </div>
-          </div>
-          <PrimaryButton type="submit" disabled={!email.trim() || !password}>
-            Sign in
+            }
+          />
+          {error && <ErrorNote>{error}</ErrorNote>}
+          <PrimaryButton type="submit" disabled={busy || !email.trim() || !password}>
+            {busy ? 'Signing in…' : 'Sign in'}
           </PrimaryButton>
+          <p className="text-center text-xs text-muted">
+            Locked out? Ask the store owner to reset your account.
+          </p>
         </form>
       </AuthCard>
     </AuthLayout>
@@ -79,48 +103,22 @@ export function LoginPage() {
 
 /** Left marketing pane (lg+ only). */
 function AdminHero() {
-  const stats = [
-    { label: 'Orders today', value: '128' },
-    { label: 'Revenue', value: '₹4.8L' },
-    { label: 'Low stock', value: '5' },
-  ]
-
   return (
     <Hero
-      accentClass="bg-gradient-to-br from-slate-800 to-slate-950"
-      logo={<>⚙ Cricket Store Admin</>}
+      image="/auth_hero_1.jpg"
+      logo={
+        <>
+          <AppLogoMark className="h-8 w-8" /> Unie Max Admin
+        </>
+      }
     >
-      {/* Decorative dashboard mock */}
-      <div className="my-10 space-y-3">
-        <div className="grid grid-cols-3 gap-3">
-          {stats.map((s) => (
-            <div key={s.label} className="rounded-xl bg-white/10 p-3 backdrop-blur">
-              <div className="text-lg font-bold text-white">{s.value}</div>
-              <div className="text-[11px] text-slate-300">{s.label}</div>
-            </div>
-          ))}
-        </div>
-        <div className="rounded-xl bg-white/10 p-4 backdrop-blur">
-          <div className="mb-2 text-xs text-slate-300">Sales this week</div>
-          <div className="flex h-16 items-end gap-1.5">
-            {[40, 65, 50, 80, 60, 90, 75].map((h, i) => (
-              <div
-                key={i}
-                className="flex-1 rounded-t bg-blue-400/80"
-                style={{ height: `${h}%` }}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-
       <div>
-        <h2 className="text-4xl font-bold leading-tight">
+        <h2 className="text-4xl font-bold leading-tight font-heading">
           Run your store
           <br />
-          <span className="text-blue-300">from one place.</span>
+          <span className="text-brand-gradient">from one place.</span>
         </h2>
-        <p className="mt-3 max-w-sm text-slate-300">
+        <p className="mt-3 max-w-sm text-white/80">
           Products, orders, inventory, and shipping — all in one console.
         </p>
       </div>

@@ -10,6 +10,8 @@ const REASON_PHRASES: Record<number, string> = {
   404: "Not Found",
   409: "Conflict",
   422: "Unprocessable Entity",
+  429: "Too Many Requests",
+  502: "Bad Gateway",
 };
 
 export class HttpError extends Error {
@@ -39,5 +41,14 @@ export class HttpError extends Error {
 
   static conflict(message = "Conflict") {
     return new HttpError(409, message);
+  }
+
+  static tooManyRequests(message = "Too many requests") {
+    return new HttpError(429, message);
+  }
+
+  /** An upstream provider (email/SMS/OAuth service) failed. */
+  static badGateway(message = "Upstream service failed") {
+    return new HttpError(502, message);
   }
 }

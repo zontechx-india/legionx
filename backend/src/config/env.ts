@@ -27,20 +27,22 @@ const envSchema = z.object({
   // CORS — "*" (any origin) in dev, or a comma-separated allowlist in prod.
   CORS_ORIGIN: z.string().default("*"),
 
+  // Proxy trust — controls whether X-Forwarded-* headers are believed.
+  // "true" (default) when the API sits behind Nginx / a load balancer;
+  // set "false" when it is exposed directly, otherwise a client can spoof
+  // X-Forwarded-For and rotate its identity past every per-IP rate limit.
+  // Also accepts a hop count ("1") or a comma-separated address list,
+  // passed straight through to Fastify's `trustProxy`.
+  TRUST_PROXY: z.string().default("true"),
+
   // Database (optional for now — the base server boots without it)
   DATABASE_URL: z.string().optional(),
   // Direct (non-pooled) connection — used by Prisma CLI for migrations.
   DIRECT_URL: z.string().optional(),
 
-  // Auth / JWT
-  JWT_SECRET: z.string().min(16, "JWT_SECRET must be at least 16 characters"),
-  JWT_ADMIN_EXPIRES_IN: z.string().default("1d"),
-  JWT_CUSTOMER_EXPIRES_IN: z.string().default("30d"),
-
-  // OTP
-  OTP_LENGTH: z.coerce.number().int().min(4).max(8).default(6),
-  OTP_TTL_MINUTES: z.coerce.number().int().min(1).max(60).default(5),
-  OTP_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(5),
+  // NOTE: all auth config (JWT, cookies, OTP/verification codes, OAuth) lives
+  // inside the self-contained auth package (src/package/auth/core/config/env.ts),
+  // not here.
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -56,6 +58,41 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
+
+/** `TRUST_PROXY` → Fastify's `trustProxy` (boolean, hop count, or address list). */
+export function resolveTrustProxy(): boolean | number | string {
+  const value = env.TRUST_PROXY.trim();
+  if (value === "true") return true;
+  if (value === "false") return false;
+  if (/^\d+$/.test(value)) return Number(value);
+  return value;
+}
+
+// ---------------------------------------------------------------------------
+// Production fail-fast guards — a misconfigured production server must refuse
+// to boot, not run quietly with dev defaults.
+// ---------------------------------------------------------------------------
+if (env.NODE_ENV === "production") {
+  const problems: string[] = [];
+  if (!env.DATABASE_URL) problems.push("DATABASE_URL is required");
+  if (!env.DIRECT_URL) problems.push("DIRECT_URL is required (migrations)");
+  if (env.CORS_ORIGIN === "*") {
+    // The API is cookie-credentialed; a wildcard origin would let any site
+    // ride the customer's session.
+    problems.push(
+      "CORS_ORIGIN must be an explicit comma-separated origin allowlist, not \"*\"",
+    );
+  }
+  if (problems.length > 0) {
+    // eslint-disable-next-line no-console
+    console.error("❌ Unsafe production configuration:");
+    for (const problem of problems) {
+      // eslint-disable-next-line no-console
+      console.error(`  - ${problem}`);
+    }
+    process.exit(1);
+  }
+}
 
 export const isProduction = env.NODE_ENV === "production";
 export const isDevelopment = env.NODE_ENV === "development";

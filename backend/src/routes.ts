@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import { requireAdmin } from "./middleware/auth.js";
+import { authRoutes, adminAuthRoutes, requireAdmin } from "./package/auth/index.js";
+import { mediaRules } from "./package/storage/index.js";
+import { ok } from "./utils/response.js";
 import { healthRoutes } from "./modules/health/health.routes.js";
-import { authRoutes } from "./modules/auth/auth.routes.js";
-import { adminAuthRoutes } from "./modules/adminAuth/admin.auth.routes.js";
 import {
   publicCategoryRoutes,
   adminCategoryRoutes,
@@ -11,6 +11,13 @@ import {
   publicProductRoutes,
   adminProductRoutes,
 } from "./modules/product/product.routes.js";
+import { storeRoutes, publicStoreRoutes } from "./modules/stores/stores.routes.js";
+import { publicDiscoveryRoutes } from "./modules/discovery/discovery.routes.js";
+import { addressRoutes } from "./modules/addresses/addresses.routes.js";
+import {
+  publicOrderRoutes,
+  customerOrderRoutes,
+} from "./modules/orders/orders.routes.js";
 
 /**
  * Central route registrar.
@@ -29,6 +36,31 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       await api.register(authRoutes, { prefix: "/auth" });
       await api.register(publicCategoryRoutes, { prefix: "/categories" });
       await api.register(publicProductRoutes, { prefix: "/products" });
+      // Customer-owned stores (guarded inside the plugin — requireCustomer).
+      await api.register(storeRoutes, { prefix: "/stores" });
+      // Customer address book (guarded inside the plugin — requireCustomer).
+      await api.register(addressRoutes, { prefix: "/addresses" });
+      // Customer order history (guarded inside the plugin — requireCustomer).
+      await api.register(customerOrderRoutes, { prefix: "/orders" });
+      // Public storefront pages by slug (published stores only, no auth).
+      await api.register(publicStoreRoutes, { prefix: "/public/stores" });
+      // Order placement + confirmation lookup (guest checkout, same prefix).
+      await api.register(publicOrderRoutes, { prefix: "/public/stores" });
+      // Marketplace discovery — global search + platform stats (homepage).
+      await api.register(publicDiscoveryRoutes, { prefix: "/public" });
+
+      // Upload rules (max sizes + allowed types) — read by clients so their
+      // hints and pre-upload validation always match the server's env config.
+      api.get("/public/media-config", async () =>
+        ok(
+          Object.fromEntries(
+            Object.entries(mediaRules).map(([kind, rule]) => [
+              kind,
+              { maxMB: rule.maxMB, contentTypes: rule.contentTypes },
+            ]),
+          ),
+        ),
+      );
 
       // ---- Admin ------------------------------------------------------
       await api.register(

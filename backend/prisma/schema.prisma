@@ -31,11 +31,19 @@ enum OrderStatus {
 }
 
 enum PaymentMethod {
+  /// Platform-processed payment (gateway; dev builds simulate it).
+  ONLINE
   COD
   UPI
   RAZORPAY
   CARD
   NETBANKING
+}
+
+/// How the customer receives the order — mirrors the store's shipping mode.
+enum OrderFulfilment {
+  DELIVERY
+  PICKUP
 }
 
 enum PaymentStatus {
@@ -58,9 +66,18 @@ enum OtpChannel {
 }
 
 enum OtpPurpose {
-  LOGIN // email/phone OTP sign-in
+  LOGIN // phone OTP sign-in
   LINK // linking a second identifier to an existing account
+  EMAIL_VERIFY // verifying a customer's email address
+  PASSWORD_RESET // forgot-password reset code
   ORDER_PLACEMENT // guest checkout verification
+}
+
+/// Social sign-in providers supported by `package/auth`. Adding a provider
+/// (e.g. APPLE going live) is one enum value + one verifier implementation.
+enum AuthProvider {
+  GOOGLE
+  APPLE
 }
 
 enum AdminRole {
@@ -138,7 +155,6 @@ model Product {
   categoryId        String
   category          Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   images            ProductImage[]
-  orderItems        OrderItem[]
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
@@ -170,40 +186,393 @@ model Customer {
 
   // A customer is identified by email and/or phone. At least one is present
   // (enforced by the auth service); each is unique to a single account, so an
-  // email/phone maps to exactly one customer. Verified via OTP at sign-in or
-  // when linked later from the profile.
+  // email/phone maps to exactly one customer. Email is verified via a
+  // verification code (or trusted from an OAuth provider); phone via OTP.
   email           String?   @unique
   phone           String?   @unique
   emailVerifiedAt DateTime?
   phoneVerifiedAt DateTime?
 
+  // Set when the customer registers with (or later adds) a password.
+  // Null for social-only / OTP-only accounts.
+  passwordHash String?
+
   name      String?
+  avatarUrl String? // usually populated from an OAuth profile picture
   altPhone  String? // secondary contact number, not a login identifier
-  orders    Order[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+
+  oauthAccounts OAuthAccount[]
+  orders        Order[]
+  stores        Store[]
+  addresses     CustomerAddress[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
   @@map("customers")
 }
 
+/// A saved delivery address in the customer's address book (a customer can
+/// keep several; service caps at 10). Exactly one is `isPrimary` — the
+/// default suggestion at checkout. The fields cover everything a store's
+/// checkout can ask for (see Store.checkout); `email` stays optional since
+/// not every store collects it.
+model CustomerAddress {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  /// Optional label shown in the list — "Home", "Work"…
+  label       String?
+  name        String
+  phone       String
+  email       String?
+  addressLine String
+  pincode     String
+  state       String
+  country     String  @default("India")
+
+  isPrimary Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerId])
+  @@map("customer_addresses")
+}
+
+/// A customer-owned online store (a single account can own several).
+/// Creation is intentionally minimal (name; logo optional — upload arrives
+/// with S3). `theme` holds the Appearance settings as JSON so the
+/// customization feature can evolve without migrations. `slug` is the
+/// store's public URL identity (auto-generated, stable across renames);
+/// `isPublished` gates the public storefront page — unpublished stores are
+/// never served to customers.
+model Store {
+  id          String  @id @default(cuid())
+  name        String
+  slug        String  @unique
+  /// Storage OBJECT KEY of the uploaded logo (e.g. "store-logo/…/x.webp") —
+  /// never a full URL. The public URL is derived from configuration at read
+  /// time, so buckets/CDNs/providers can change without touching rows.
+  logoKey     String?
+  theme       Json? // { backgroundColor, primaryColor, secondaryColor?, surfaceColor?, buttonTextColor? }
+  /// Which storefront homepage sections the owner shows.
+  /// { hero, categories, featured, newArrivals, bestSellers } — all default
+  /// true. JSON like `theme` so new sections (offers, banners, reviews…) can
+  /// be added without a migration.
+  homepage    Json?
+  /// Owner-managed storefront footer content: business locations (with
+  /// optional map coordinates), social profiles, store info (about, GST…),
+  /// customer support, policy links, custom links and copyright text.
+  /// JSON like `theme`/`homepage` so footer sections can evolve without a
+  /// migration; validated + normalised by `stores.schema.ts#resolveFooter`.
+  footer      Json?
+  /// Payment acceptance switches: { acceptOnlinePayment, acceptCod }.
+  /// Defaults (via `resolvePayments`): COD on, online off. JSON so future
+  /// methods (UPI-only, partial payment…) slot in without a migration.
+  payments    Json?
+  /// Shipping/fulfilment settings: { mode: DELIVERY | PICKUP | BOTH }
+  /// (default DELIVERY via `resolveShipping`). JSON so the shipping-charge
+  /// rules (fixed/district/state) can join the column without a migration.
+  shipping    Json?
+  /// Which customer fields this store's checkout collects:
+  /// { name, phone, email, address, pincode, state, country } — booleans,
+  /// all default TRUE via `resolveCheckoutFields`. A disabled field is
+  /// hidden from the customer and excluded from checkout validation.
+  checkout    Json?
+  isPublished Boolean @default(false)
+  /// Set the FIRST time the store is published (never reset), so marketplace
+  /// "New Stores" ranks by real publish time — re-publishing an old store
+  /// doesn't bump it back to the top.
+  publishedAt DateTime?
+
+  ownerId String
+  owner   Customer @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  categories   StoreCategory[]
+  products     StoreProduct[]
+  bankAccounts StoreBankAccount[]
+  orders       Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
+  @@index([isPublished])
+  // Marketplace "New Stores" listing: published stores by publish recency.
+  @@index([isPublished, publishedAt])
+  @@map("stores")
+}
+
+/// A category inside a customer-owned store (separate from the admin's
+/// global Category tree). Products require a category, so owners must
+/// create a category before they can add products — the enforced setup
+/// sequence. One optional level of nesting: a root category can hold
+/// subcategories (`parentId`), and a subcategory cannot have children —
+/// Store → Category → Subcategory → Product (service-enforced).
+model StoreCategory {
+  id      String @id @default(cuid())
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  // Optional parent — null for root categories. Deleting a category with
+  // subcategories is a 409 (Restrict), mirroring the products guard.
+  parentId String?
+  parent   StoreCategory?  @relation("StoreCategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children StoreCategory[] @relation("StoreCategoryTree")
+
+  name     String
+  /// URL identity within the store — the storefront addresses a category as
+  /// /store/{storeSlug}/category/{slug}. Generated from the name on create
+  /// and deliberately STABLE across renames, so shared links keep working
+  /// (same convention as Store.slug).
+  slug     String
+  // Disabled categories (and everything inside them, subcategories
+  // included) are hidden from the public storefront but stay manageable —
+  // the store-catalog analogue of the store-level publish switch.
+  isActive Boolean        @default(true)
+  /// Surfaces this root category in the storefront homepage's
+  /// "Featured Categories" row. Owner-controlled merchandising.
+  isFeatured Boolean      @default(false)
+  products StoreProduct[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([storeId, name])
+  @@unique([storeId, slug])
+  @@index([storeId])
+  @@index([parentId])
+  @@index([isActive])
+  @@map("store_categories")
+}
+
+/// A product inside a customer-owned store. Category is mandatory
+/// (Restrict — deleting a category with products is a 409, mirroring the
+/// admin catalog's delete guard). Images arrive with the S3 integration.
+model StoreProduct {
+  id      String @id @default(cuid())
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  categoryId String
+  category   StoreCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  name        String
+  /// URL identity within the store — /store/{storeSlug}/product/{slug}.
+  /// Generated on create, stable across renames.
+  slug        String
+  description String?
+  // Price and stock live on the VARIANTS, never here — the variant is the
+  // unit of sale. A product with no options still has exactly one variant
+  // (flagged `isDefault`), so there is always precisely one place a price
+  // can come from.
+  //
+  // Disabled products are hidden from the public storefront (a product is
+  // publicly visible only when it AND its category are active).
+  isActive    Boolean @default(true)
+
+  /// Owner-controlled merchandising. Each flag maps to exactly ONE storefront
+  /// homepage section and nothing else — a product appears in a section if and
+  /// only if its flag is set, so the checkboxes mean literally what they say.
+  /// `hideFromSearch` is unrelated to the homepage: it removes the product from
+  /// search results while leaving it browsable in its category.
+  isFeatured     Boolean @default(false)
+  isBestSeller   Boolean @default(false)
+  isNewArrival   Boolean @default(false)
+  hideFromSearch Boolean @default(false)
+
+  /// DENORMALISED aggregates over the product's **sellable** variants (active
+  /// only), maintained by `recomputeProductAggregates()` on every variant
+  /// mutation. Price lives on the variant, so without these columns the
+  /// storefront could not sort or filter by price in SQL — it would have to
+  /// load every product into memory, defeating pagination. `priceMin` is null
+  /// when nothing is sellable, which is exactly the "hide from storefront"
+  /// condition.
+  priceMin   Decimal? @db.Decimal(10, 2)
+  priceMax   Decimal? @db.Decimal(10, 2)
+  stockTotal Int      @default(0)
+
+  variants   StoreProductVariant[]
+  media      StoreProductMedia[]
+  orderItems OrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([storeId, slug])
+  @@index([storeId])
+  @@index([categoryId])
+  @@index([isActive])
+  @@index([priceMin])
+  @@index([isFeatured])
+  @@index([isBestSeller])
+  @@index([isNewArrival])
+  @@map("store_products")
+}
+
+/// A purchasable variation of a store product — one label covers whatever
+/// axes the product needs ("Red", "XL", "128 GB", "Red / 128 GB"). This is
+/// the **unit of sale**: price and stock live here, never on the product, so
+/// every product owns at least one variant (an option-less product carries a
+/// single implicit one flagged `isDefault`).
+model StoreProductVariant {
+  id        String       @id @default(cuid())
+  productId String
+  product   StoreProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  name          String
+  // Required: every variant carries its own price (no inheriting a base).
+  price         Decimal  @db.Decimal(10, 2)
+  stockQuantity Int      @default(0)
+  // Disabled variants are hidden from the public storefront.
+  isActive      Boolean  @default(true)
+  // The implicit single variant of a product that has no options. It is
+  // hidden from the storefront's variant picker and is replaced the moment
+  // the owner adds a real, named variant.
+  isDefault     Boolean  @default(false)
+
+  orderItems OrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([productId, name])
+  @@index([productId])
+  @@map("store_product_variants")
+}
+
+enum StoreMediaType {
+  IMAGE
+  VIDEO
+}
+
+/// Verification state of a seller payout account. Accounts start PENDING;
+/// verification will be performed by a third-party provider (penny-drop /
+/// account validation API) and can also be done manually by a Unie Max admin
+/// from the future admin panel. Editing a verified account's details resets
+/// it to PENDING.
+enum BankVerificationStatus {
+  PENDING
+  VERIFIED
+  FAILED
+}
+
+/// How a payout account was (or will be) verified — provisioned now, wired
+/// when the third-party integration and the admin panel land.
+enum BankVerificationMethod {
+  THIRD_PARTY
+  MANUAL
+}
+
+/// A seller's payout bank account (a store can save several). Exactly ONE
+/// may be primary — that account alone receives payouts from Unie Max when
+/// customers pay through the platform. Verification fields are provisioned
+/// ahead of the integrations: `verificationRef` stores the third-party
+/// provider's check id, `verifiedBy` the admin who manually verified
+/// (future admin panel), `verificationNote` a failure reason / admin note.
+model StoreBankAccount {
+  id      String @id @default(cuid())
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  accountHolderName String
+  accountNumber     String
+  ifsc              String
+  bankName          String
+  branch            String
+  upiId             String?
+
+  /// The payout target. At most one per store (service-enforced).
+  isPrimary Boolean @default(false)
+
+  verificationStatus BankVerificationStatus  @default(PENDING)
+  verificationMethod BankVerificationMethod?
+  verificationRef    String?
+  verificationNote   String?
+  verifiedAt         DateTime?
+  verifiedBy         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // The same account can't be added to one store twice.
+  @@unique([storeId, accountNumber, ifsc])
+  @@index([storeId])
+  @@map("store_bank_accounts")
+}
+
+/// Media attached to a store product — up to 8 images and 1 video
+/// (service-enforced). Stores only the storage OBJECT KEY (e.g.
+/// "products/{storeId}/{productId}/x.webp"), never a URL: the public URL is
+/// derived from configuration at read time, so the bucket, CDN, AWS account
+/// or storage provider can change without touching a single row.
+/// The image with the lowest `displayOrder` is the product's COVER image.
+model StoreProductMedia {
+  id        String         @id @default(cuid())
+  productId String
+  product   StoreProduct   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  type         StoreMediaType
+  key          String
+  /// Optional alternative text for accessibility (images only in practice).
+  altText      String?
+  displayOrder Int            @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([productId, displayOrder])
+  @@map("store_product_media")
+}
+
+/// A social-login identity linked to a customer (one row per provider account).
+/// `(provider, providerAccountId)` is the stable key OAuth providers guarantee
+/// (Google/Apple `sub` claim) — email on the provider side can change.
+model OAuthAccount {
+  id                String       @id @default(cuid())
+  provider          AuthProvider
+  providerAccountId String // the provider's stable user id (`sub`)
+  email             String? // provider-side email at link time (snapshot)
+  customerId        String
+  customer          Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdAt         DateTime     @default(now())
+
+  @@unique([provider, providerAccountId])
+  @@index([customerId])
+  @@map("oauth_accounts")
+}
+
+/// A customer order, placed PER STORE at the storefront checkout. Everything
+/// the order needs is snapshotted (store name/slug, contact + delivery
+/// details, item names/prices), so history survives store or product edits
+/// and deletions. Contact/delivery fields are nullable because the SELLER
+/// chooses which checkout fields to collect (Store.checkout).
 model Order {
   id          String   @id @default(cuid())
   orderNumber String   @unique
   status      OrderStatus @default(PENDING)
 
-  // Optional link to a Customer; snapshot fields below keep the order
-  // self-contained even for pure guests or after profile edits.
+  // The store the order belongs to — SetNull + snapshots below so the
+  // seller deleting their store never erases a customer's order history.
+  storeId   String?
+  store     Store?  @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  storeName String
+  storeSlug String
+
+  // Optional link to a Customer (guest checkout keeps it null).
   customerId  String?
   customer    Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
-  // Delivery snapshot (captured at checkout)
-  customerName String
-  customerPhone String
-  altPhone     String?
-  addressLine  String
-  district     String
-  state        String
-  pincode      String
+  fulfilment OrderFulfilment @default(DELIVERY)
+
+  // Contact + delivery snapshot (captured at checkout; per-store fields).
+  customerName  String?
+  customerPhone String?
+  customerEmail String?
+  addressLine   String?
+  pincode       String?
+  state         String?
+  country       String?
 
   // Money (all snapshots at time of order)
   subtotal       Decimal @db.Decimal(10, 2)
@@ -212,6 +581,21 @@ model Order {
 
   paymentMethod PaymentMethod @default(COD)
   paymentStatus PaymentStatus @default(PENDING)
+  /// Gateway payment reference — "DEV-SIMULATED" for development-mode
+  /// online payments; the real gateway id once payments go live.
+  paymentRef    String?
+
+  // Seller order-management lifecycle stamps — set when the seller moves the
+  // order along PENDING → CONFIRMED → PACKED → SHIPPED → DELIVERED (forward
+  // jumps are allowed, e.g. PACKED → DELIVERED for pickup orders — a skipped
+  // stage simply keeps a null stamp) or cancels it.
+  confirmedAt  DateTime?
+  packedAt     DateTime?
+  shippedAt    DateTime?
+  deliveredAt  DateTime?
+  cancelledAt  DateTime?
+  /// Optional seller note captured on cancellation.
+  cancelReason String?
 
   estimatedDeliveryAt DateTime?
   placedAt            DateTime  @default(now())
@@ -219,23 +603,31 @@ model Order {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
+  @@index([storeId])
   @@index([customerId])
   @@index([customerPhone])
   @@index([status])
   @@map("orders")
 }
 
+/// One line of an order. Product/variant links are nullable + snapshotted so
+/// historical orders survive catalog edits and deletions. `imageKey` is the
+/// cover image's storage key at order time (URL derived at read).
 model OrderItem {
   id        String  @id @default(cuid())
   orderId   String
   order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-  // Product link is nullable + snapshotted so historical orders survive
-  // product edits/deletes.
   productId   String?
-  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  product     StoreProduct? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  variantId   String?
+  variant     StoreProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
   productName String
-  sku         String
+  /// Chosen option label ("Red / 128 GB") — null for simple products.
+  variantName String?
+  productSlug String?
+  imageKey    String?
   unitPrice   Decimal @db.Decimal(10, 2)
   quantity    Int
   lineTotal   Decimal @db.Decimal(10, 2)
@@ -276,8 +668,11 @@ model Otp {
   id          String     @id @default(cuid())
   channel     OtpChannel
   destination String // email address or phone number the code was sent to
-  // Store a hash of the code, never the plaintext.
-  codeHash    String
+  // Locally-generated codes (EMAIL): a hash of the code, never the plaintext.
+  codeHash    String?
+  // Provider-managed codes (SMS via Message Central): the provider's
+  // verification id — the code itself never touches our servers.
+  providerRef String?
   purpose     OtpPurpose
   // Set for LINK requests — the account the identifier is being linked to.
   customerId  String?
@@ -325,4 +720,27 @@ model Admin {
   updatedAt    DateTime  @updatedAt
 
   @@map("admins")
+}
+
+/// Refresh-token session issued by the standalone `package/auth` module.
+/// Domain-agnostic on purpose: it stores only an opaque principal
+/// (`principalId` + `principalType`), never a foreign key, so the package
+/// stays reusable across projects. Rotated on each refresh; `replacedById`
+/// links the chain so a reused (already-rotated) token flags a breach.
+model AuthSession {
+  id            String   @id @default(cuid())
+  principalId   String
+  principalType String // "admin" | "customer"
+  role          String? // snapshot (e.g. admin role) for fast re-issue
+  refreshHash   String   @unique // sha256 of the opaque refresh token
+  userAgent     String?
+  ip            String?
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  replacedById  String? // id of the session that rotated this one
+  createdAt     DateTime @default(now())
+  lastUsedAt    DateTime @default(now())
+
+  @@index([principalId, principalType])
+  @@map("auth_sessions")
 }

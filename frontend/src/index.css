@@ -1,16 +1,238 @@
 @import 'tailwindcss';
 
+/* ------------------------------------------------------------------ *
+ * anydesk design system (skillui) — theme layer
+ *
+ * Colors are the only themeable axis (dark default + light + per-store
+ * override on /store/{slug}). Typography, spacing, radius and shadows are
+ * global tokens straight from the skill and never change per theme.
+ *
+ * Semantic Tailwind utilities generated below:
+ *   bg-bg · bg-surface · bg-surface-alt · bg-input · border-line
+ *   text-fg · text-muted · bg-brand · text-brand · bg-accent · text-accent
+ *   text-success/warning/danger/info · rounded-md · shadow-floating
+ *   font-heading · font-body
+ * ------------------------------------------------------------------ */
+
+/* Type pairing (both SIL OFL, self-hosted as latin variable files):
+ *   Oswald — condensed display face for headings, product names, prices;
+ *            reads athletic/retail, always with +0.02em tracking (see below).
+ *   Inter  — body/UI text.
+ * Adopted from the approved Unie Max prototype (prototype/index.html). */
+@font-face {
+  font-family: 'Oswald';
+  src: url('/fonts/Oswald-Variable.woff2') format('woff2');
+  font-weight: 200 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/Inter-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Static (never-flipping) tokens → generate font/radius/shadow utilities. */
+@theme {
+  --font-heading: 'Oswald', 'Segoe UI', system-ui, sans-serif;
+  --font-body: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+  --radius-xs: 2px;
+  --radius-sm: 3.2px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-pill: 50px;
+
+  /* Soft, even elevation — no offset so it sits equally on all four sides. */
+  --shadow-floating: 0 0 12px 0 rgba(0, 0, 0, 0.06);
+}
+
+/* Color utilities bind to CSS vars so they flip at runtime (dark/light/store). */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-alt: var(--surface-alt);
+  --color-input: var(--input-bg);
+  --color-line: var(--line);
+  --color-fg: var(--fg);
+  --color-muted: var(--fg-muted);
+
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-contrast: var(--brand-contrast);
+  /* Text on CTA buttons — contrasts the CTA background (store-overridable). */
+  --color-cta-contrast: var(--cta-contrast);
+  --color-accent: var(--accent);
+
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+}
+
+/* Dark is the default theme. */
 :root {
+  --bg: #000000;
+  --surface: #2e2e2e;
+  --surface-alt: #101010;
+  --input-bg: #000000;
+  --line: #1a1a1a;
+  --fg: #ffffff;
+  --fg-muted: #8c8c8c;
+
+  /* invariants (identical across themes) */
+  --brand: #ef443b;
+  --brand-hover: #cd1a11;
+  --brand-contrast: #ffffff;
+  --cta-contrast: #ffffff;
+  --orange: #ff8a3d;
+  /* Signature red→orange brand gradient (app chrome only). */
+  --brand-gradient: linear-gradient(135deg, #ef443b 0%, #ff8a3d 100%);
+  --accent: #1863dc;
+  /* Metal-CTA fallbacks cut from the app brand red — store pages override
+   * these via storeVars() with the OWNER's colors; the fallbacks keep
+   * metal CTAs rendering on store-themed-but-neutral pages (e.g. a /cart
+   * with no known store). Mirrors the storeVars() derivation for #ef443b. */
+  --brand-metal: linear-gradient(180deg, #f37872 0%, #ef443b 48%, #bf362f 100%);
+  --brand-metal-hover: linear-gradient(180deg, #f58b85 0%, #f0534b 48%, #d23c34 100%);
+  --brand-metal-edge: rgba(255, 255, 255, 0.34);
+  --brand-glow: 0 6px 18px -8px rgba(239, 68, 59, 0.65);
+  --success: #008000;
+  --warning: #856404;
+  --danger: #ef443b;
+  --info: #0000ee;
+  --overlay: rgba(0, 0, 0, 0.6);
+
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  --bg: #f5f5f5;
+  --surface: #ffffff;
+  --surface-alt: #ffffff;
+  --input-bg: #ffffff;
+  --line: #d0d5d2;
+  --fg: #101010;
+  --fg-muted: #8c8c8c;
+
   color-scheme: light;
 }
 
-html,
-body,
-#root {
-  min-height: 100%;
+/* Brand gradient helpers — the one place a gradient is allowed (skill's
+ * primary-orange-gradient). Solid brand tokens stay the default everywhere
+ * else; use these only on hero surfaces, brand marks and primary CTAs. */
+@layer utilities {
+  .bg-brand-gradient {
+    background-image: var(--brand-gradient);
+  }
+  .text-brand-gradient {
+    background-image: var(--brand-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
 }
 
-body {
-  margin: 0;
-  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+/* ------------------------------------------------------------------ *
+ * Metal accents — public store page (/store/{slug}) ONLY.
+ *
+ * A deliberate, scoped deviation from the skill's "solid colors only"
+ * rule, on the same precedent as the brand gradient above. Deliberately
+ * SCARCE: page surfaces, bars, chips and wells are flat semantic colors;
+ * the shine is reserved for primary CTAs and the card hover glow, so it
+ * marks importance rather than texture. Nothing here hardcodes a color —
+ * both tokens come from variables `storeTheme.ts#storeVars()` derives
+ * from the STORE OWNER's own colors. The rest of both apps stays flat.
+ * ------------------------------------------------------------------ */
+@layer utilities {
+  /* Interactive card lift. The hover shadow has NO x/y offset, so the halo
+   * spreads equally on all four sides rather than pooling underneath — the
+   * same principle as the skill's `--shadow-floating`. Motion is intentionally
+   * small; `prefers-reduced-motion` already neutralises the duration globally. */
+  .metal-lift {
+    transition:
+      box-shadow 240ms ease,
+      transform 240ms ease;
+  }
+  .metal-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--metal-glow);
+  }
+
+  /* Oswald is condensed — wherever the heading face is used as a utility it
+   * carries the same +0.02em tracking as the base h1–h3 rule. Declared after
+   * Tailwind's generated utilities, so it also wins over `tracking-tight`
+   * (Oswald should never be tightened further). */
+  .font-heading {
+    letter-spacing: 0.02em;
+  }
+
+  /* Brand-gradient display text (prototype's `gold-text`), cut from the
+   * owner's primary color. Brand marks only — store name, logo text. */
+  .metal-text {
+    background-image: var(--brand-metal);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+
+  /* Primary CTA, chrome cut from the owner's brand color. */
+  .metal-cta {
+    background-image: var(--brand-metal);
+    box-shadow:
+      inset 0 1px 0 var(--brand-metal-edge),
+      var(--brand-glow);
+  }
+  .metal-cta:hover {
+    background-image: var(--brand-metal-hover);
+  }
+  .metal-cta:disabled:hover {
+    background-image: var(--brand-metal);
+  }
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Type pairing: display headings in Oswald, body/UI in Inter. Oswald is
+   * condensed, so it always carries a touch of tracking (prototype's
+   * `.font-display` rule) — applied here and by the `font-heading` utility. */
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-heading);
+    letter-spacing: 0.02em;
+  }
+
+  /* Accent focus ring for keyboard users (skill: blue #1863dc outline). */
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 }

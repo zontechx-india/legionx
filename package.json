@@ -8,7 +8,7 @@
     "backend": "npm --prefix backend run dev",
     "dev": "concurrently \"npm --prefix frontend run dev\" \"npm --prefix backend run dev\""
   },
-  "name": "legionx",
+  "name": "uniemax",
   "version": "1.0.0",
   "description": "",
   "private": true,

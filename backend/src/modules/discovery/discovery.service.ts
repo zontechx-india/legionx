@@ -1,0 +1,161 @@
+import { prisma } from "../../config/prisma.js";
+import { Prisma } from "../../generated/prisma/client.js";
+import { mediaUrl } from "../../package/storage/index.js";
+import { PUBLIC_PRODUCT_VISIBILITY } from "../stores/publicStore.service.js";
+import type { SearchQuery } from "./discovery.schema.js";
+
+/**
+ * Platform-wide discovery: global search + trust stats for the marketplace
+ * homepage. Everything here is anonymous and read-only, and every query
+ * reuses `PUBLIC_PRODUCT_VISIBILITY` — the same rule the storefront enforces
+ * — so search can never surface something a store page would hide.
+ *
+ * Matching is `contains` (ILIKE) on names. That is the right tool at this
+ * scale; when the catalog grows into millions of rows the upgrade path is a
+ * pg_trgm GIN index / Postgres FTS behind this same service function — the
+ * API contract doesn't change.
+ */
+
+/** A store must be published for ANY of its content to be discoverable. */
+const publishedStore = { isPublished: true } satisfies Prisma.StoreWhereInput;
+
+/**
+ * Categories are discoverable when they're active, their parent chain is
+ * active, their store is published, and they contain at least one visible
+ * product — a hit must never land the visitor on an empty page.
+ */
+function discoverableCategoryWhere(q: string): Prisma.StoreCategoryWhereInput {
+  return {
+    name: { contains: q, mode: "insensitive" },
+    isActive: true,
+    OR: [{ parentId: null }, { parent: { isActive: true } }],
+    store: publishedStore,
+    products: { some: PUBLIC_PRODUCT_VISIBILITY },
+  };
+}
+
+/**
+ * Grouped global search: stores, categories, products — each group capped at
+ * `limit` and queried concurrently. Category and product hits carry their
+ * owning store, because categories/products only exist inside a store
+ * (`/store/{storeSlug}/…` is their only address).
+ */
+export async function searchPlatform({ q, limit }: SearchQuery) {
+  const [stores, categories, products] = await Promise.all([
+    prisma.store.findMany({
+      where: { ...publishedStore, name: { contains: q, mode: "insensitive" } },
+      select: { id: true, name: true, slug: true, logoKey: true },
+      orderBy: [
+        { publishedAt: { sort: "desc", nulls: "last" } },
+        { createdAt: "desc" },
+      ],
+      take: limit,
+    }),
+
+    prisma.storeCategory.findMany({
+      where: discoverableCategoryWhere(q),
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        parent: { select: { name: true } },
+        store: { select: { name: true, slug: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    }),
+
+    prisma.storeProduct.findMany({
+      where: {
+        ...PUBLIC_PRODUCT_VISIBILITY,
+        // The owner's "Hide from Search" flag applies to marketplace search
+        // exactly like in-store search.
+        hideFromSearch: false,
+        store: publishedStore,
+        name: { contains: q, mode: "insensitive" },
+      },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        priceMin: true,
+        stockTotal: true,
+        category: { select: { name: true } },
+        store: { select: { name: true, slug: true } },
+        media: {
+          where: { type: "IMAGE" },
+          orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
+          take: 1,
+          select: { key: true, altText: true },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    }),
+  ]);
+
+  return {
+    stores: stores.map(({ logoKey, ...store }) => ({
+      ...store,
+      logoUrl: mediaUrl("logo", logoKey),
+    })),
+    categories: categories.map((category) => ({
+      id: category.id,
+      name: category.name,
+      slug: category.slug,
+      parentName: category.parent?.name ?? null,
+      store: category.store,
+    })),
+    products: products.map((product) => {
+      const cover = product.media[0] ?? null;
+      return {
+        id: product.id,
+        name: product.name,
+        slug: product.slug,
+        price: product.priceMin,
+        stockQuantity: product.stockTotal,
+        categoryName: product.category.name,
+        store: product.store,
+        image: cover
+          ? { url: mediaUrl("media", cover.key), altText: cover.altText }
+          : null,
+      };
+    }),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Platform stats
+// ---------------------------------------------------------------------------
+
+/**
+ * Micro-cache for the homepage trust counters. The numbers change slowly and
+ * every visitor requests them, so one process-wide value with a short TTL
+ * turns a count-scan per page view into one per minute. (When the API runs
+ * multi-instance each process keeps its own copy — still correct, still
+ * bounded at one scan per instance per minute.)
+ */
+const STATS_TTL_MS = 60_000;
+let statsCache: { data: PlatformStats; expiresAt: number } | null = null;
+
+export interface PlatformStats {
+  stores: number;
+  products: number;
+}
+
+/** Published-store count + publicly visible product count. */
+export async function getPlatformStats(): Promise<PlatformStats> {
+  const now = Date.now();
+  if (statsCache && statsCache.expiresAt > now) return statsCache.data;
+
+  const [stores, products] = await Promise.all([
+    prisma.store.count({ where: publishedStore }),
+    prisma.storeProduct.count({
+      where: { ...PUBLIC_PRODUCT_VISIBILITY, store: publishedStore },
+    }),
+  ]);
+
+  const data = { stores, products };
+  statsCache = { data, expiresAt: now + STATS_TTL_MS };
+  return data;
+}

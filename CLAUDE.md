@@ -1,4 +1,4 @@
-# LegionX — Project Instructions
+# Unie Max — Project Instructions
 
 White-label e-commerce platform. Backend: Fastify + Prisma 7 + PostgreSQL (Supabase).
 Frontend: React + Tailwind.

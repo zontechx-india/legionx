@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>LEGIONX — Sports Factory</title>
+  <title>UNIE MAX — Sports Factory</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -73,9 +73,9 @@
     <div class="max-w-7xl mx-auto px-4 sm:px-6">
       <div class="h-16 flex items-center gap-4">
         <a href="#/home" class="flex items-center gap-2.5 shrink-0">
-          <img src="logo.png" alt="LEGIONX" class="h-11 w-11 object-contain rounded-md ring-1 ring-gold/30" />
+          <img src="logo.png" alt="UNIE MAX" class="h-11 w-11 object-contain rounded-md ring-1 ring-gold/30" />
           <div class="leading-none hidden sm:block">
-            <div class="font-display text-xl font-700 gold-text">LEGIONX</div>
+            <div class="font-display text-xl font-700 gold-text">UNIE MAX</div>
             <div class="text-[10px] tracking-[0.35em] text-zinc-500 dark:text-zinc-500 -mt-0.5">SPORTS FACTORY</div>
           </div>
         </a>
@@ -118,7 +118,7 @@
       <div>
         <div class="flex items-center gap-2.5 mb-3">
           <img src="logo.png" class="h-10 w-10 object-contain rounded" />
-          <span class="font-display text-lg gold-text">LEGIONX</span>
+          <span class="font-display text-lg gold-text">UNIE MAX</span>
         </div>
         <p class="text-sm text-zinc-500 leading-relaxed">Precision-crafted cricket bats, engineered in our sports factory for players who demand power and control.</p>
       </div>
@@ -144,13 +144,13 @@
         <h4 class="font-display text-gold text-sm mb-3 tracking-wide">CONTACT</h4>
         <ul class="space-y-2 text-sm text-zinc-400">
           <li>📞 +91 98765 43210</li>
-          <li>✉️ care@legionx.in</li>
+          <li>✉️ care@uniemax.in</li>
           <li>📍 Jalandhar, Punjab, India</li>
         </ul>
       </div>
     </div>
     <div class="border-t border-ink-800 py-5 text-center text-xs text-zinc-600">
-      © 2026 LEGIONX Sports Factory · White-label commerce prototype · Cash on Delivery available
+      © 2026 UNIE MAX Sports Factory · White-label commerce prototype · Cash on Delivery available
     </div>
   </footer>
 
@@ -164,10 +164,10 @@
 
   <script>
   /* =======================================================================
-     LEGIONX prototype — data
+     UNIE MAX prototype — data
   ======================================================================= */
   const CATEGORIES = [
-    { id:'hard-tennis', name:'Hard Tennis Bats', icon:'🏏', desc:'Heavy-duty tennis ball bats' },
+    { id:'hard-tennis', name:'Hard Tennis Bats', icon:'〽️', desc:'Heavy-duty tennis ball bats' },
     { id:'soft-tennis', name:'Soft Tennis Bats', icon:'🎾', desc:'Light bats for soft tennis balls' },
     { id:'leather',     name:'Leather Ball Bats', icon:'⚡', desc:'Grade willow for season play' },
     { id:'accessories', name:'Accessories',       icon:'🧤', desc:'Grips, guards & kit bags' },
@@ -175,15 +175,15 @@
 
   const P = (o) => ({ rating:4.5, images:1, ...o });
   const PRODUCTS = [
-    P({ id:'lx-thunder',  name:'LegionX Thunder',   cat:'hard-tennis', brand:'LegionX', price:2499, mrp:3299, stock:24, sku:'LX-HT-001', wood:'Kashmir Willow', weight:'1180g', tone:'#E6B325', badge:'BEST SELLER', spec:{Willow:'Kashmir',Weight:'1150-1200g',Handle:'Semi Oval',Grains:'6-8 Straight'} }),
-    P({ id:'lx-blaster',  name:'LegionX Blaster X',  cat:'hard-tennis', brand:'LegionX', price:1899, mrp:2499, stock:8,  sku:'LX-HT-002', wood:'Poplar Willow', weight:'1100g', tone:'#F5D06F', badge:'NEW', spec:{Willow:'Poplar',Weight:'1080-1120g',Handle:'Round',Grains:'5-7'} }),
-    P({ id:'lx-viper',    name:'LegionX Viper Pro',  cat:'hard-tennis', brand:'LegionX', price:3299, mrp:3999, stock:0,  sku:'LX-HT-003', wood:'English Willow', weight:'1220g', tone:'#C9971A', badge:'', spec:{Willow:'English Grade 3',Weight:'1200-1240g',Handle:'Oval',Grains:'8-10'} }),
-    P({ id:'lx-storm',    name:'LegionX Storm',      cat:'soft-tennis', brand:'LegionX', price:1299, mrp:1699, stock:37, sku:'LX-ST-001', wood:'Poplar Willow', weight:'980g', tone:'#8FD4C6', badge:'', spec:{Willow:'Poplar',Weight:'950-1000g',Handle:'Round',Grains:'4-6'} }),
-    P({ id:'lx-falcon',   name:'LegionX Falcon',     cat:'soft-tennis', brand:'LegionX', price:1599, mrp:1999, stock:15, sku:'LX-ST-002', wood:'Kashmir Willow', weight:'1010g', tone:'#7FB2E6', badge:'NEW', spec:{Willow:'Kashmir',Weight:'990-1030g',Handle:'Semi Oval',Grains:'5-7'} }),
-    P({ id:'lx-gladiator',name:'LegionX Gladiator',  cat:'leather',     brand:'LegionX', price:5499, mrp:6999, stock:6,  sku:'LX-LB-001', wood:'English Willow', weight:'1250g', tone:'#E67E22', badge:'PRO', spec:{Willow:'English Grade 1',Weight:'1230-1270g',Handle:'Oval',Grains:'10-12'} }),
-    P({ id:'lx-titan',    name:'LegionX Titan',      cat:'leather',     brand:'LegionX', price:4299, mrp:5299, stock:11, sku:'LX-LB-002', wood:'English Willow', weight:'1240g', tone:'#D35400', badge:'', spec:{Willow:'English Grade 2',Weight:'1220-1260g',Handle:'Semi Oval',Grains:'8-10'} }),
-    P({ id:'lx-grip',     name:'Pro Bat Grip (2 Pack)',cat:'accessories',brand:'LegionX', price:249, mrp:399, stock:120, sku:'LX-AC-001', wood:'Rubber', weight:'40g', tone:'#9B59B6', badge:'', spec:{Type:'Octopus Grip',Pack:'2 Units',Color:'Assorted'} }),
-    P({ id:'lx-toe',      name:'Toe Guard Kit',      cat:'accessories', brand:'LegionX', price:199, mrp:299, stock:64, sku:'LX-AC-002', wood:'Fibre', weight:'25g', tone:'#16A085', badge:'', spec:{Type:'Anti-crack',Includes:'Guard + Glue'} }),
+    P({ id:'lx-thunder',  name:'Unie Max Thunder',   cat:'hard-tennis', brand:'Unie Max', price:2499, mrp:3299, stock:24, sku:'LX-HT-001', wood:'Kashmir Willow', weight:'1180g', tone:'#E6B325', badge:'BEST SELLER', spec:{Willow:'Kashmir',Weight:'1150-1200g',Handle:'Semi Oval',Grains:'6-8 Straight'} }),
+    P({ id:'lx-blaster',  name:'Unie Max Blaster X',  cat:'hard-tennis', brand:'Unie Max', price:1899, mrp:2499, stock:8,  sku:'LX-HT-002', wood:'Poplar Willow', weight:'1100g', tone:'#F5D06F', badge:'NEW', spec:{Willow:'Poplar',Weight:'1080-1120g',Handle:'Round',Grains:'5-7'} }),
+    P({ id:'lx-viper',    name:'Unie Max Viper Pro',  cat:'hard-tennis', brand:'Unie Max', price:3299, mrp:3999, stock:0,  sku:'LX-HT-003', wood:'English Willow', weight:'1220g', tone:'#C9971A', badge:'', spec:{Willow:'English Grade 3',Weight:'1200-1240g',Handle:'Oval',Grains:'8-10'} }),
+    P({ id:'lx-storm',    name:'Unie Max Storm',      cat:'soft-tennis', brand:'Unie Max', price:1299, mrp:1699, stock:37, sku:'LX-ST-001', wood:'Poplar Willow', weight:'980g', tone:'#8FD4C6', badge:'', spec:{Willow:'Poplar',Weight:'950-1000g',Handle:'Round',Grains:'4-6'} }),
+    P({ id:'lx-falcon',   name:'Unie Max Falcon',     cat:'soft-tennis', brand:'Unie Max', price:1599, mrp:1999, stock:15, sku:'LX-ST-002', wood:'Kashmir Willow', weight:'1010g', tone:'#7FB2E6', badge:'NEW', spec:{Willow:'Kashmir',Weight:'990-1030g',Handle:'Semi Oval',Grains:'5-7'} }),
+    P({ id:'lx-gladiator',name:'Unie Max Gladiator',  cat:'leather',     brand:'Unie Max', price:5499, mrp:6999, stock:6,  sku:'LX-LB-001', wood:'English Willow', weight:'1250g', tone:'#E67E22', badge:'PRO', spec:{Willow:'English Grade 1',Weight:'1230-1270g',Handle:'Oval',Grains:'10-12'} }),
+    P({ id:'lx-titan',    name:'Unie Max Titan',      cat:'leather',     brand:'Unie Max', price:4299, mrp:5299, stock:11, sku:'LX-LB-002', wood:'English Willow', weight:'1240g', tone:'#D35400', badge:'', spec:{Willow:'English Grade 2',Weight:'1220-1260g',Handle:'Semi Oval',Grains:'8-10'} }),
+    P({ id:'lx-grip',     name:'Pro Bat Grip (2 Pack)',cat:'accessories',brand:'Unie Max', price:249, mrp:399, stock:120, sku:'LX-AC-001', wood:'Rubber', weight:'40g', tone:'#9B59B6', badge:'', spec:{Type:'Octopus Grip',Pack:'2 Units',Color:'Assorted'} }),
+    P({ id:'lx-toe',      name:'Toe Guard Kit',      cat:'accessories', brand:'Unie Max', price:199, mrp:299, stock:64, sku:'LX-AC-002', wood:'Fibre', weight:'25g', tone:'#16A085', badge:'', spec:{Type:'Anti-crack',Includes:'Guard + Glue'} }),
   ];
 
   const BANNERS = [
@@ -238,7 +238,7 @@
       </g>
       <!-- sticker -->
       <rect x="52" y="230" width="56" height="150" rx="8" fill="${tone}" opacity=".92"/>
-      <text x="80" y="300" text-anchor="middle" fill="#141414" font-family="Oswald,sans-serif" font-weight="700" font-size="16" transform="rotate(90 80 300)">LEGIONX</text>
+      <text x="80" y="300" text-anchor="middle" fill="#141414" font-family="Oswald,sans-serif" font-weight="700" font-size="16" transform="rotate(90 80 300)">UNIE MAX</text>
     </svg>`;
   }
   function accessorySVG(tone){
@@ -306,7 +306,7 @@
         <div class="banner-slide ${i===0?'':'hidden'} h-[300px] sm:h-[380px] relative"
              style="background:radial-gradient(120% 120% at 15% 20%, ${b.tone}22 0%, transparent 55%), linear-gradient(120deg,#0A0A0C 0%,#141416 60%, ${b.tone}18 100%)">
           <div class="absolute inset-0 flex flex-col justify-center px-8 sm:px-14 max-w-2xl">
-            <span class="text-xs tracking-[0.4em] text-gold mb-3">LEGIONX · SPORTS FACTORY</span>
+            <span class="text-xs tracking-[0.4em] text-gold mb-3">UNIE MAX · SPORTS FACTORY</span>
             <h1 class="font-display text-4xl sm:text-6xl font-700 text-white leading-none">${b.title}</h1>
             <p class="mt-4 text-zinc-300 text-base sm:text-lg max-w-md">${b.sub}</p>
             <a href="${b.href}" class="mt-6 gold-btn w-fit px-6 py-3 rounded-xl font-semibold text-sm">${b.cta} →</a>
@@ -352,7 +352,7 @@
       <div>
         <div class="h-1 w-10 gold-btn rounded mb-3"></div>
         <h2 class="font-display text-3xl text-zinc-100 mb-3">Crafted in our Sports Factory</h2>
-        <p class="text-zinc-400 leading-relaxed">Every LegionX bat is hand-finished, weight-balanced and factory knock-in ready. From Kashmir willow tennis bats to English willow pro blades — built for Indian pitches, priced for every player.</p>
+        <p class="text-zinc-400 leading-relaxed">Every Unie Max bat is hand-finished, weight-balanced and factory knock-in ready. From Kashmir willow tennis bats to English willow pro blades — built for Indian pitches, priced for every player.</p>
         <div class="grid grid-cols-3 gap-4 mt-6">
           <div><div class="font-display text-2xl gold-text">12K+</div><div class="text-xs text-zinc-500">Bats shipped</div></div>
           <div><div class="font-display text-2xl gold-text">4.7★</div><div class="text-xs text-zinc-500">Avg rating</div></div>
@@ -434,7 +434,7 @@
             ${off(p)>0?`<span class="text-lg text-zinc-500 line-through">${money(p.mrp)}</span><span class="text-sm font-semibold text-emerald-400">Save ${off(p)}%</span>`:''}
           </div>
           <div class="mt-3">${stockPill(p)}</div>
-          <p class="mt-5 text-zinc-400 leading-relaxed">Premium ${p.wood} blade with a powerful profile and balanced pickup at ${p.weight}. Factory knocked-in, grip-fitted and match ready — engineered by LegionX for explosive stroke play.</p>
+          <p class="mt-5 text-zinc-400 leading-relaxed">Premium ${p.wood} blade with a powerful profile and balanced pickup at ${p.weight}. Factory knocked-in, grip-fitted and match ready — engineered by Unie Max for explosive stroke play.</p>
 
           <!-- quantity + actions -->
           <div class="mt-6 flex items-center gap-4">
@@ -617,7 +617,7 @@
         <svg class="w-10 h-10" fill="none" stroke="#141414" stroke-width="3" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>
       </div>
       <h1 class="font-display text-3xl text-zinc-100">Order Confirmed!</h1>
-      <p class="text-zinc-400 mt-2">Thank you, ${order.name.split(' ')[0]}. Your gear is on the way. 🏏</p>
+      <p class="text-zinc-400 mt-2">Thank you, ${order.name.split(' ')[0]}. Your gear is on the way. 〽️</p>
       <div class="mt-8 rounded-2xl border border-ink-800 bg-ink-900 p-6 text-left">
         <div class="flex justify-between items-center pb-4 border-b border-ink-800">
           <div><div class="text-xs text-zinc-500">Order ID</div><div class="font-display text-lg text-gold">${order.id}</div></div>
@@ -698,7 +698,7 @@
         <aside class="rounded-2xl border border-ink-800 bg-ink-900 p-4 h-fit">
           <div class="flex items-center gap-2 px-2 pb-4 mb-2 border-b border-ink-800">
             <img src="logo.png" class="h-8 w-8 object-contain rounded"/>
-            <div><div class="font-display text-sm gold-text leading-none">LEGIONX</div><div class="text-[10px] text-zinc-500">Admin Panel</div></div>
+            <div><div class="font-display text-sm gold-text leading-none">UNIE MAX</div><div class="text-[10px] text-zinc-500">Admin Panel</div></div>
           </div>
           <nav class="space-y-1">
             ${tabs.map(([k,l,ic])=>`<a href="#/admin/${k}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm ${k===tab?'gold-btn font-semibold':'text-zinc-400 hover:bg-ink-800'}"><span>${ic}</span>${l}</a>`).join('')}

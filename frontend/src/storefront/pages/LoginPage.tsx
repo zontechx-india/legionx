@@ -56,6 +56,10 @@ export function LoginPage({ onSignedIn }: { onSignedIn: (customer: Customer) => 
   const [notice, setNotice] = useState('') // cross-view success message
 
   const tab = view === 'phone' || view === 'phone-verify' ? 'phone' : 'email'
+  // The tabs switch the SIGN-IN method. Register / forgot / reset are
+  // email-only sub-flows (Mobile OTP is login-only), so the switcher is
+  // not part of those views at all.
+  const showMethodTabs = view === 'email' || view === 'phone' || view === 'phone-verify'
 
   return (
     <AuthLayout
@@ -70,17 +74,19 @@ export function LoginPage({ onSignedIn }: { onSignedIn: (customer: Customer) => 
       />
 
       <AuthCard>
-        <SegmentedTabs
-          tabs={[
-            { value: 'email', label: 'Email' },
-            { value: 'phone', label: 'Mobile OTP' },
-          ]}
-          value={tab}
-          onChange={(t) => {
-            setNotice('')
-            setView(t === 'phone' ? 'phone' : 'email')
-          }}
-        />
+        {showMethodTabs && (
+          <SegmentedTabs
+            tabs={[
+              { value: 'email', label: 'Email' },
+              { value: 'phone', label: 'Mobile OTP' },
+            ]}
+            value={tab}
+            onChange={(t) => {
+              setNotice('')
+              setView(t === 'phone' ? 'phone' : 'email')
+            }}
+          />
+        )}
 
         {notice && (
           <div className="mb-4">
@@ -282,6 +288,10 @@ function Register({
   if (step === 'form') {
     return (
       <form className="space-y-4" onSubmit={requestCode}>
+        <div>
+          <h2 className="text-base font-semibold text-fg">Create your account</h2>
+          <p className="mt-0.5 text-xs text-muted">Sign up with your email address.</p>
+        </div>
         <TextField
           label="Name"
           placeholder="Your name (optional)"

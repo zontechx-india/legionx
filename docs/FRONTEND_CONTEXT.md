@@ -60,7 +60,11 @@ and in dev the Vite proxy (`/api` → `localhost:4000` in `vite.config.ts`) keep
 the API same-origin — matching production, so no CORS/SameSite issues.
 
 **Storefront login** (`storefront/pages/LoginPage.tsx`) — all three backend
-methods, switched by a segmented Email / Mobile-OTP control:
+methods, switched by a segmented Email / Mobile-OTP control. The switcher is
+a **sign-in** method picker only: it renders on the sign-in views (email
+password, phone, phone-verify) and is hidden on the email-only sub-flows —
+create account (which carries its own "Create your account" heading),
+forgot password and reset — since Mobile OTP cannot create an account:
 - **Email + password** — sign in, **verify-first registration** (form → emailed
   code → account created verified + signed in), and the forgot-password flow
   (email → code + new password).

@@ -23,6 +23,13 @@ import {
   notifyOrderPlaced,
   notifyOrderStatusChange,
 } from "./orders.notifications.js";
+import {
+  cashfreeConfigured,
+  createPaymentSession,
+  reconcilePendingPayment,
+  voidPaymentSession,
+  type PaymentSession,
+} from "../payments/payments.service.js";
 
 /**
  * Order placement — the storefront checkout's final step. Requires a
@@ -35,10 +42,13 @@ import {
  * guarded update (a concurrent order can't oversell), and the totals are
  * computed server-side.
  *
- * Payment: COD orders start `paymentStatus: PENDING`. ONLINE orders are
- * **simulated** outside production (`paymentRef: "DEV-SIMULATED"`, marked
- * PAID instantly); in production they are refused until the real gateway
- * lands — the checkout then offers only the store's other methods.
+ * Payment: COD orders start `paymentStatus: PENDING`. ONLINE orders go
+ * through Cashfree when the gateway keys are configured — the order is
+ * created PENDING, a Cashfree payment session is attached, and the response
+ * carries `payment.paymentSessionId` for the web SDK; PAID arrives via the
+ * webhook (payments module). Without keys, dev builds simulate the payment
+ * (`paymentRef: "DEV-SIMULATED"`, marked PAID instantly) and production
+ * refuses ONLINE with 503.
  */
 
 const FIELD_LABELS: Record<CheckoutFieldKey, string> = {
@@ -174,9 +184,8 @@ export async function createOrder(
   if (input.paymentMethod === "COD" && !payments.acceptCod) {
     throw HttpError.badRequest("This store does not accept cash on delivery");
   }
-  if (input.paymentMethod === "ONLINE" && isProduction) {
-    // The real gateway is the next milestone; until then production must
-    // never pretend a payment happened.
+  if (input.paymentMethod === "ONLINE" && isProduction && !cashfreeConfigured) {
+    // Without gateway keys, production must never pretend a payment happened.
     throw new HttpError(
       503,
       "Online payment is not available yet — please choose another method",
@@ -285,7 +294,11 @@ export async function createOrder(
   const shippingCharge = new Prisma.Decimal(0);
   const total = subtotal.add(shippingCharge);
 
-  const simulated = input.paymentMethod === "ONLINE" && !isProduction;
+  // Real gateway when keys are configured (any env — sandbox keys in dev
+  // exercise the real flow); the old dev simulation only without them.
+  const viaGateway = input.paymentMethod === "ONLINE" && cashfreeConfigured;
+  const simulated =
+    input.paymentMethod === "ONLINE" && !isProduction && !cashfreeConfigured;
 
   const row = await prisma.$transaction(async (tx) => {
     // Guarded decrement: the WHERE re-checks stock inside the transaction,
@@ -347,10 +360,45 @@ export async function createOrder(
     });
   });
 
+  // Gateway orders: register the Cashfree order and hand the session id to
+  // the client. If Cashfree refuses, the order must not linger holding stock
+  // — undo the placement (nothing references it yet) and surface the error.
+  let payment: PaymentSession | undefined;
+  if (viaGateway) {
+    try {
+      payment = await createPaymentSession({
+        id: row.id,
+        orderNumber: row.orderNumber,
+        storeSlug: row.storeSlug,
+        total: row.total,
+        customerId,
+        customerName: row.customerName,
+        customerPhone: row.customerPhone,
+        customerEmail: row.customerEmail,
+      });
+    } catch (err) {
+      await prisma.$transaction(async (tx) => {
+        for (const line of lines) {
+          await tx.storeProductVariant.updateMany({
+            where: { id: line.stockVariantId },
+            data: { stockQuantity: { increment: line.quantity } },
+          });
+        }
+        for (const productId of new Set(lines.map((l) => l.productId))) {
+          await recomputeProductAggregates(productId, tx);
+        }
+        await tx.order.delete({ where: { id: row.id } });
+      });
+      throw err;
+    }
+  }
+
   const shaped = shapeOrder(row);
   // Fire-and-forget: confirmation to the customer + alert to the seller.
-  notifyOrderPlaced(shaped, customerId, store.owner.email);
-  return shaped;
+  // Gateway orders wait for the money — the payments module sends these
+  // same notifications when the payment settles.
+  if (!viaGateway) notifyOrderPlaced(shaped, customerId, store.owner.email);
+  return { ...shaped, payment: payment ?? null };
 }
 
 /**
@@ -608,11 +656,15 @@ export async function updateOrderStatus(
  * Cancel an order (PENDING / CONFIRMED / PACKED only — once it ships, plain
  * cancellation is off the table; returns/RTO are a future flow). Restores
  * the stock the order had reserved and recomputes product aggregates in the
- * same transaction. A PAID order flips to REFUNDED — today PAID can only
- * come from dev-simulated online payments (production refuses ONLINE at
- * placement, and COD is only PAID after delivery, which can't be cancelled),
- * so the "refund" is as simulated as the payment; the real refund flow
- * arrives with the payment gateway.
+ * same transaction.
+ *
+ * Payment: an UNPAID online order also has its Cashfree order terminated, so
+ * a customer sitting on the hosted checkout can't pay for stock that just
+ * went back on sale (a payment that still slips through is recorded and
+ * flagged for refund — see `markOrderPaid`). A PAID order flips to
+ * REFUNDED, which today is a STATUS ONLY: no refund call is made, so the
+ * money must be returned from the Cashfree dashboard until the automatic
+ * refund lands (see docs/CASHFREE_PAYMENTS.md).
  */
 export async function cancelOrder(
   ownerId: string,
@@ -686,6 +738,11 @@ export async function cancelOrder(
     }
   });
 
+  // Close the payment window before answering: the stock is back on sale, so
+  // the customer's still-open checkout must stop being payable. Never throws
+  // and is time-bounded, so a gateway problem can't fail or hang the cancel.
+  await voidPaymentSession(orderId);
+
   const row = await prisma.order.findFirst({
     where: { id: orderId },
     select: orderSelect,
@@ -700,8 +757,14 @@ export async function cancelOrder(
  * Order confirmation lookup — no auth, keyed by the order's unguessable cuid
  * scoped to its store slug (the success page's data source; guests have no
  * account to look orders up under).
+ *
+ * Doubles as the webhook fallback: an ONLINE order still awaiting payment is
+ * reconciled against Cashfree before answering, so the success page the
+ * gateway redirects to shows PAID even when the webhook hasn't arrived
+ * (or can't — e.g. local dev).
  */
 export async function getPublicOrder(storeSlug: string, orderId: string) {
+  await reconcilePendingPayment(orderId); // best-effort, no-op unless needed
   const row = await prisma.order.findFirst({
     where: { id: orderId, storeSlug },
     select: orderSelect,

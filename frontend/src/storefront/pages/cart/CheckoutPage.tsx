@@ -13,6 +13,7 @@ import { useStoreShell } from '../../features/publicStore/useStoreShells'
 import {
   cartUrl,
   formatPrice,
+  launchCashfreeCheckout,
   publicOrderApi,
   storeHomeUrl,
 } from '../../features/stores/storesApi'
@@ -96,6 +97,11 @@ export function CheckoutPage({ storeSlug }: { storeSlug: string }) {
       // The order owns these items now — clear them before leaving so a
       // back-navigation doesn't offer to buy them twice.
       cart.clearStore(storeSlug)
+      if (order.payment?.paymentSessionId) {
+        // Cashfree gateway order — hand over to the hosted checkout; it
+        // redirects back to the order page (return_url) after payment.
+        await launchCashfreeCheckout(order.payment)
+      }
       navigate(`/order/${storeSlug}/${order.id}`, { replace: true })
     } catch (err) {
       const apiError = toApiError(err)

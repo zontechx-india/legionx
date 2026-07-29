@@ -582,8 +582,15 @@ model Order {
   paymentMethod PaymentMethod @default(COD)
   paymentStatus PaymentStatus @default(PENDING)
   /// Gateway payment reference — "DEV-SIMULATED" for development-mode
-  /// online payments; the real gateway id once payments go live.
+  /// online payments; the Cashfree cf_payment_id once a real payment lands.
   paymentRef    String?
+  /// The order_id registered with Cashfree for the LATEST payment attempt —
+  /// orderNumber for the first attempt, "orderNumber~R<n>" for retries after
+  /// an expired session. Null for COD / simulated orders.
+  cfOrderId        String? @unique
+  /// Cashfree payment_session_id of the latest attempt (drives the web SDK
+  /// checkout). Useless once paymentStatus is PAID.
+  paymentSessionId String?
 
   // Seller order-management lifecycle stamps — set when the seller moves the
   // order along PENDING → CONFIRMED → PACKED → SHIPPED → DELIVERED (forward

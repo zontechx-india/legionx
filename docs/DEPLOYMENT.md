@@ -36,6 +36,9 @@ plink -batch -ssh -hostkey "SHA256:HgxgT0NGDiSy1s8opS1b41JcA67ndeHN87b9Sk8DlME" 
 | `/var/www/uniemax`                    | nginx web root (frontend build output)   |
 | `/etc/nginx/sites-available/uniemax`  | nginx site — IP access, ports 80 + 8080 (symlinked into `sites-enabled`) |
 | `/etc/nginx/sites-available/uniemax-domain` | nginx vhost for `dev.uniemax.zontechx.com` + HTTPS (certbot-managed) |
+| `/var/www/uniemax-prod`               | nginx web root for the **prod** frontend (updated only by `/deploy_prod`) |
+| `/etc/nginx/sites-available/uniemax-prod` | nginx site — prod frontend by IP on port 8081 |
+| `/etc/nginx/sites-available/uniemax-prod-domain` | nginx vhost for `uniemax.zontechx.com` (prod) |
 | `/home/ubuntu/uniemax/backup/`        | Backup of the previous deployment's backend `.env` (git-ignored via `.git/info/exclude`) |
 
 The EC2's own SSH key is registered with GitHub (user `anwin-paulji`), so
@@ -46,6 +49,7 @@ The EC2's own SSH key is registered with GitHub (user `anwin-paulji`), so
 | Port | Service                            | Reachable from internet? |
 | ---- | ---------------------------------- | ------------------------ |
 | 8080 | **nginx → Unie Max frontend + `/api` proxy (dedicated port, for domain mapping)** | needs TCP 8080 inbound in the security group |
+| 8081 | **nginx → Unie Max PROD frontend + `/api` proxy (dedicated port)** | needs TCP 8081 inbound in the security group |
 | 80   | nginx → same Unie Max site (`default_server`, kept temporarily) | ✅ (security group open) |
 | 443  | nginx (other project SSL)          | ✅                       |
 | 4000 | Unie Max backend (Fastify, pm2 `uniemax-backend`) | ❌ internal only — proxied via nginx `/api` |
@@ -79,6 +83,26 @@ other pm2 apps (`ziktag-backend`, `track-user-backend`) are untouched.
 | `http://13.206.249.204:8080/`                  | Same site, direct port (needs TCP 8080 in SG) |
 | `http://13.206.249.204/` (+ `/admin`, `/api`)  | Same site on port 80 (IP fallback) |
 
+### Production site (frontend-only)
+
+| URL                                          | What                                  |
+| -------------------------------------------- | ------------------------------------- |
+| **`https://uniemax.zontechx.com/`**          | PROD storefront                       |
+| **`https://uniemax.zontechx.com/admin`**     | PROD admin app                        |
+| `http://13.206.249.204:8081/`                | Same prod site, direct port (needs TCP 8081 in SG) |
+
+Prod serves its own frontend build from `/var/www/uniemax-prod` (nginx sites
+`uniemax-prod` on port 8081 + `uniemax-prod-domain` for the domain) but shares
+the **same backend** (`uniemax-backend`, :4000) and database as dev. The prod
+frontend only changes when `/deploy_prod` runs, so it can intentionally lag
+behind dev. Backend changes deployed via `/deploy_dev` affect **both** sites.
+
+Prod domain & HTTPS (set up 2026-07-29): Cloudflare A record
+`uniemax.zontechx.com` → `13.206.249.204` (**DNS only** / grey cloud — same
+renewal rule as dev), Let's Encrypt cert via `certbot --nginx` (cert name
+`uniemax.zontechx.com`, auto-renews, expires/rolls 2026-10-27), HTTP→HTTPS 301
+on the domain. TCP 8081 is open in the security group for direct-IP access.
+
 ## Domain & HTTPS
 
 - DNS: `dev.uniemax.zontechx.com` → A record → `13.206.249.204` (Cloudflare,
@@ -100,6 +124,12 @@ Deployment is done by Claude Code from the local machine (no CI/CD): push to
 `main` on GitHub, then run **`/deploy_dev`** in Claude Code (or say "deploy
 uniemax to EC2"). Claude runs the steps below over SSH (plink, see
 [Server](#server)).
+
+For production, run **`/deploy_prod`** — frontend-only: same pull as below, then
+`npm run build` in `frontend/` and copy `dist/*` to `/var/www/uniemax-prod`
+(never touches the backend/pm2). Verify prod via
+`curl http://127.0.0.1:8081/` + `/admin` + `/api/v1/public/stores` on the
+server, then `https://uniemax.zontechx.com/` from the local machine.
 
 > ⚠️ **The repo root is an npm workspace** (`frontend` + `backend`). Always run
 > `npm ci` from the repo **root** (`~/uniemax`). Running it inside `backend/` or

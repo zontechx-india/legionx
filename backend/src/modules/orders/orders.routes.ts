@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { requireCustomer } from "../../package/auth/index.js";
 import * as controller from "./orders.controller.js";
+import * as paymentsController from "../payments/payments.controller.js";
 
 /**
  * Storefront order placement + confirmation lookup. Mounted alongside the
@@ -22,6 +23,16 @@ export const publicOrderRoutes: FastifyPluginAsync = async (app) => {
     controller.createOrder,
   );
   app.get("/:slug/orders/:orderId", controller.getOrder);
+  // "Pay now / Retry payment" for an unpaid ONLINE order — returns a usable
+  // Cashfree payment session (reusing the active one when possible).
+  app.post(
+    "/:slug/orders/:orderId/pay",
+    {
+      preHandler: requireCustomer,
+      config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+    },
+    paymentsController.createPaySession,
+  );
 };
 
 /**

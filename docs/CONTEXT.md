@@ -81,8 +81,8 @@ A single account can own multiple stores and switch between them.
   cash-on-delivery order Delivered also records it as paid. An order can
   be **cancelled** any time before it ships (optional reason); its items
   return to stock automatically, and a paid order is marked refunded
-  (today only dev-simulated payments can be paid — the real refund flow
-  ships with the payment gateway).
+  (status only for gateway payments — the money is refunded from the
+  Cashfree dashboard until the automatic refund call ships).
 - **Homepage sections** — **arrange** the storefront homepage: drag (or ▲/▼)
   to reorder the sections — Hero Banner, Shop by Category, Featured Products,
   New Arrivals, Best Sellers — and switch each on or off. Order and visibility
@@ -329,9 +329,12 @@ A single account can own multiple stores and switch between them.
   store-themed **Order Success** page (order number, paid/pay-on-delivery
   status, items, delivery or pickup summary) that guests can reopen by
   link. **Payment:** Cash on Delivery is live end-to-end; **online payment
-  is simulated in development builds** (marked "DEV-SIMULATED") and
-  **refused in production** until the real platform gateway ships — a
-  production build can never fake a payment.
+  runs through the Cashfree gateway** (hosted checkout via the Cashfree web
+  SDK — the success page tracks the payment, refreshes itself until it
+  confirms, and offers **Pay now / Retry payment** while unpaid; see
+  `docs/CASHFREE_PAYMENTS.md`). Without gateway keys, development builds
+  simulate the payment ("DEV-SIMULATED") and production refuses online
+  payment — a production build can never fake a payment.
 - **Saved addresses** — every customer has an address book (`/addresses`,
   account menu → Saved Addresses): up to 10 delivery addresses (optional
   label, name, phone, optional email, address, pincode, state, country),
@@ -339,7 +342,8 @@ A single account can own multiple stores and switch between them.
   address becomes primary automatically and deleting the primary promotes
   the oldest remaining). Checkout offers the list as one-tap suggestions.
 
-Future releases add: the real online-payment gateway (with real refunds),
+Future releases add: automatic Cashfree refunds on cancellation (today a
+paid order's refund is executed from the Cashfree dashboard),
 shipping-charge rules, customer-side order tracking/cancellation,
 dedicated store policy pages (policy links are already supported in
 the footer), SEO settings, and additional configuration. (Footer/business
@@ -672,14 +676,15 @@ Future:
 
 # Payment
 
-Phase 1
+Phase 1 (live)
 
 - Cash on Delivery
+- Online payment via **Cashfree** (hosted checkout — UPI/cards/netbanking;
+  see `docs/CASHFREE_PAYMENTS.md`)
 
 Phase 2
 
-- UPI
-- Razorpay
+- Automatic refunds via the Cashfree refund API
 - Credit/Debit Cards
 - Net Banking
 

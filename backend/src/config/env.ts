@@ -40,6 +40,19 @@ const envSchema = z.object({
   // Direct (non-pooled) connection — used by Prisma CLI for migrations.
   DIRECT_URL: z.string().optional(),
 
+  // Cashfree Payment Gateway (PG REST API v4, header x-api-version).
+  // Both keys unset = gateway off: dev simulates ONLINE payments, production
+  // refuses them with 503 (exactly the pre-gateway behavior).
+  CASHFREE_APP_ID: z.string().optional(),
+  CASHFREE_SECRET_KEY: z.string().optional(),
+  // sandbox → https://sandbox.cashfree.com/pg · production → https://api.cashfree.com/pg
+  CASHFREE_ENV: z.enum(["sandbox", "production"]).default("sandbox"),
+  CASHFREE_API_VERSION: z.string().default("2023-08-01"),
+  // Public origin of THIS API (e.g. https://api.example.com) — used to build
+  // the webhook notify_url sent with each Cashfree order. Optional: without
+  // it, configure the webhook URL in the Cashfree merchant dashboard instead.
+  PUBLIC_API_URL: z.string().optional(),
+
   // NOTE: all auth config (JWT, cookies, OTP/verification codes, OAuth) lives
   // inside the self-contained auth package (src/package/auth/core/config/env.ts),
   // not here.
@@ -81,6 +94,13 @@ if (env.NODE_ENV === "production") {
     // ride the customer's session.
     problems.push(
       "CORS_ORIGIN must be an explicit comma-separated origin allowlist, not \"*\"",
+    );
+  }
+  if (Boolean(env.CASHFREE_APP_ID) !== Boolean(env.CASHFREE_SECRET_KEY)) {
+    // Half-configured gateway: orders would be accepted but every session
+    // creation (or webhook verification) would fail at runtime.
+    problems.push(
+      "CASHFREE_APP_ID and CASHFREE_SECRET_KEY must be set together",
     );
   }
   if (problems.length > 0) {

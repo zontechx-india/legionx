@@ -43,7 +43,11 @@ Verify: `curl http://localhost:4000/health`
 | `LOG_LEVEL`    | Pino level (default `info`)                               |
 | `CORS_ORIGIN`  | `*` or comma-separated allowlist (**production requires an explicit allowlist**) |
 | `TRUST_PROXY`  | `true` (default — behind Nginx/LB) \| `false` (exposed directly) \| hop count \| address list. Controls whether `X-Forwarded-*` is believed — set `false` when direct, or clients can spoof IPs past the rate limits |
-| `PUBLIC_WEB_URL` | Optional storefront origin (e.g. `https://shop.example.com`) — when set, order emails carry deep links |
+| `PUBLIC_WEB_URL` | Optional storefront origin (e.g. `https://shop.example.com`) — when set, order emails carry deep links and Cashfree payments return to the order page |
+| `CASHFREE_APP_ID` / `CASHFREE_SECRET_KEY` | Cashfree PG credentials. Both set → real ONLINE payments (sandbox keys work in dev); unset → dev simulates, production answers 503. **Production refuses to boot with only one of the two** |
+| `CASHFREE_ENV` | `sandbox` (default — `sandbox.cashfree.com/pg`) \| `production` (`api.cashfree.com/pg`); also picks the web SDK mode |
+| `CASHFREE_API_VERSION` | `x-api-version` header (default `2023-08-01`, PG API v4) |
+| `PUBLIC_API_URL` | Optional public origin of this API — builds the per-order webhook `notify_url`; otherwise configure the webhook URL in the Cashfree dashboard (see [docs/CASHFREE_PAYMENTS.md](../docs/CASHFREE_PAYMENTS.md)) |
 | `DATABASE_URL` | Pooled connection (runtime) — Supabase PgBouncer `:6543`  |
 | `DIRECT_URL`   | Direct connection (migrations) — Supabase `:5432`         |
 | `JWT_SECRET`   | **Required.** Signs access tokens (admin + customer)      |

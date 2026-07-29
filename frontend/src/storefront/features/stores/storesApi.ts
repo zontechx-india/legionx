@@ -1271,14 +1271,31 @@ export interface PlacedOrder {
   /** Optional seller note captured on cancellation. */
   cancelReason: string | null
   items: PlacedOrderItem[]
+  /** Cashfree session for an ONLINE order awaiting payment — feed it to the
+   *  web SDK's checkout(). Null/absent on COD, simulated and read paths. */
+  payment?: PaymentSession | null
 }
+
+/** A live Cashfree payment session (drives @cashfreepayments/cashfree-js). */
+export interface PaymentSession {
+  paymentSessionId: string
+  cfOrderId: string
+  /** Which SDK environment to load. */
+  mode: 'sandbox' | 'production'
+}
+
+/** "Pay now" answer — PAID means the money already landed (nothing to do). */
+export type PaySessionResult =
+  | { paymentStatus: 'PAID' }
+  | { paymentStatus: 'PENDING'; payment: PaymentSession }
 
 export const publicOrderApi = {
   /**
    * Place the order (201). Server-side gates: published store only, method/
    * fulfilment must be seller-enabled, required checkout fields validated
-   * per the store's config, stock re-checked. ONLINE payments are simulated
-   * in development; production answers 503 until the gateway lands.
+   * per the store's config, stock re-checked. With the gateway configured,
+   * ONLINE orders return `payment.paymentSessionId` for the Cashfree SDK;
+   * without it dev simulates the payment and production answers 503.
    */
   async place(slug: string, input: OrderCreateInput): Promise<PlacedOrder> {
     return call<PlacedOrder>(
@@ -1292,6 +1309,28 @@ export const publicOrderApi = {
       http.get(`${PUBLIC_STORES}/${slug}/orders/${orderId}`),
     )
   },
+
+  /**
+   * Pay now / retry payment on an unpaid ONLINE order (signed-in owner
+   * only). Reuses the active Cashfree session or registers a new attempt.
+   */
+  async paySession(slug: string, orderId: string): Promise<PaySessionResult> {
+    return call<PaySessionResult>(
+      http.post(`${PUBLIC_STORES}/${slug}/orders/${orderId}/pay`),
+    )
+  },
+}
+
+/** Launch the Cashfree hosted checkout — navigates away on success. */
+export async function launchCashfreeCheckout(
+  payment: PaymentSession,
+): Promise<void> {
+  const { load } = await import('@cashfreepayments/cashfree-js')
+  const cashfree = await load({ mode: payment.mode })
+  await cashfree.checkout({
+    paymentSessionId: payment.paymentSessionId,
+    redirectTarget: '_self',
+  })
 }
 
 // ---------------------------------------------------------------------------

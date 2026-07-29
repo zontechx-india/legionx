@@ -282,8 +282,8 @@ Seller dashboard for one store — order counters + the latest 8 orders.
     "shipped": 0,          //                      ├ seller order endpoints
     "completed": 0,        // DELIVERED           ─┘ below
     "cancelled": 0,
-    "refunded": 0,         // paymentStatus REFUNDED (today only via
-                           // cancelling a paid dev-simulated order)
+    "refunded": 0,         // paymentStatus REFUNDED (via cancelling a
+                           // paid order — see the cancel endpoint's note)
     "totalOrders": 5,
     "revenue": "12495.00"  // sum of non-cancelled order totals
   },
@@ -333,11 +333,16 @@ a concurrent update won the race. Returns the full order.
 Cancels the order — allowed only while it hasn't shipped (`PENDING` /
 `CONFIRMED` / `PACKED`; `409` otherwise). In one transaction the items'
 stock is **restored** (lines whose product/variant was deleted since are
-skipped) and product aggregates recompute. A `PAID` order flips to
-`paymentStatus: REFUNDED` — today that can only be a dev-simulated online
-payment, so the refund is equally simulated; the real refund flow arrives
-with the payment gateway. Returns the full order (`cancelledAt` +
-`cancelReason` set).
+skipped) and product aggregates recompute. An **unpaid ONLINE** order also
+has its Cashfree order terminated, so a customer sitting on the hosted
+checkout can no longer pay for stock that just went back on sale; a payment
+that still races through is recorded and flagged for refund rather than
+confirmed (see [CASHFREE_PAYMENTS.md](./CASHFREE_PAYMENTS.md)). A `PAID`
+order flips to `paymentStatus: REFUNDED` — **status only**: the Cashfree
+refund API is not wired yet, so money paid through the gateway must
+currently be refunded from the Cashfree merchant dashboard (the automatic
+refund call is the next payments milestone). Returns the full order
+(`cancelledAt` + `cancelReason` set).
 
 ### `PATCH /api/v1/stores/:id`
 Update `name`. Renaming does **not** change the slug, so shared links keep
@@ -937,11 +942,15 @@ guarded update inside the transaction — concurrent orders can't oversell
 same transaction. Totals: `subtotal` + `shippingCharge` (0 until the
 shipping-rules feature) = `total`.
 
-**Payment:** `COD` orders start `paymentStatus: "PENDING"`. `ONLINE` is
-**simulated outside production** — instantly `PAID` with
-`paymentRef: "DEV-SIMULATED"`; in production it answers
-**`503 "Online payment is not available yet"`** until the real gateway
-lands, so a production build can never fake a payment.
+**Payment:** `COD` orders start `paymentStatus: "PENDING"`. `ONLINE` goes
+through **Cashfree** when the gateway keys are configured (see
+[CASHFREE_PAYMENTS.md](./CASHFREE_PAYMENTS.md)): the order is created
+`PENDING`, a Cashfree order is registered, and the response carries a
+`payment` object for the web SDK. If Cashfree rejects the registration the
+placement is rolled back (stock restored, order deleted, `502`). Without
+keys, the pre-gateway behavior holds: dev **simulates** (instantly `PAID`,
+`paymentRef: "DEV-SIMULATED"`), production answers
+**`503 "Online payment is not available yet"`**.
 
 Response: the full order —
 ```jsonc
@@ -956,15 +965,45 @@ Response: the full order —
   "deliveredAt", "cancelledAt", "cancelReason",   // until the seller gets there
   "items": [ { "id", "productName", "variantName", "productSlug",
                "imageUrl",          // cover snapshot (key-derived)
-               "unitPrice", "quantity", "lineTotal" } ] }
+               "unitPrice", "quantity", "lineTotal" } ],
+  "payment": {                      // ONLY on a gateway ONLINE placement —
+    "paymentSessionId": "session_…",// feed to the Cashfree web SDK checkout()
+    "cfOrderId": "UM-…",            // the order id registered with Cashfree
+    "mode": "sandbox"               // sandbox | production (SDK load mode)
+  }                                 // null on COD / simulated placements
+}
 ```
 
 ### `GET /api/v1/public/stores/:slug/orders/:orderId` (no auth)
 
 Confirmation lookup for the order-success page, keyed by the order's
 unguessable cuid scoped to its store slug — anonymous so the confirmation
-link keeps working in a fresh session. Same shape as above; `404` if
-unknown.
+link keeps working in a fresh session. Same shape as above (never includes
+`payment`); `404` if unknown. An ONLINE order still awaiting payment is
+**reconciled against Cashfree** before answering (webhook fallback), so the
+success page converges on `PAID` by polling this endpoint.
+
+### `POST /api/v1/public/stores/:slug/orders/:orderId/pay` 🔒 customer
+
+"Pay now / retry payment" for an unpaid `ONLINE` order the signed-in
+customer placed. Reconciles with Cashfree first, reuses the active payment
+session when it is still valid, and registers a fresh Cashfree order
+(`orderNumber~R<n>`) once the previous one expired. Answers
+`{ "paymentStatus": "PAID" }` when the money already landed, else
+`{ "paymentStatus": "PENDING", "payment": { paymentSessionId, cfOrderId,
+mode } }`. `409` on COD/cancelled/paid-and-refunded orders; `503` when the
+gateway is not configured.
+
+### `POST /api/v1/payments/webhooks/cashfree` (no auth — HMAC-guarded)
+
+Cashfree's server-to-server payment notification. Authenticity is verified
+with `x-webhook-signature` = Base64(HMAC-SHA256(`x-webhook-timestamp` +
+raw body, API secret)) — invalid signatures get `401`. Verified
+`PAYMENT_SUCCESS_WEBHOOK` events flip the order to `PAID` (after an amount
+check) and send the deferred placement emails; `PAYMENT_FAILED_WEBHOOK`
+marks a still-pending order `FAILED` (retryable); everything else is
+acknowledged and ignored. Idempotent — replays and duplicates are no-ops.
+Not rate-limited. Details: [CASHFREE_PAYMENTS.md](./CASHFREE_PAYMENTS.md).
 
 ### `GET /api/v1/orders` 🔒 customer
 
@@ -1180,15 +1219,15 @@ Deletes the product. Order history is preserved (order items keep a product snap
 
 ## Planned Endpoints (not yet implemented)
 
-- Real online-payment gateway (Razorpay/UPI) — order placement is LIVE
-  (`POST /public/stores/:slug/orders`) with COD + dev-simulated online
-  payment; production online payment stays 503 until the gateway lands
+- Cashfree **refunds** — `POST /pg/orders/{id}/refunds` on seller
+  cancellation of a PAID order (today cancellation only flips the status;
+  the money is refunded manually from the Cashfree dashboard)
 - `GET /api/v1/shipping/quote` — auto shipping calculation (orders currently
   ship free)
 - `GET /api/v1/banners`, `GET /api/v1/store` — home page content
 - `GET /api/v1/admin/dashboard` — admin metrics
 - `POST /api/v1/auth/{web,mobile}/apple` — Apple Sign-In (same shape as Google)
-- Payments (Razorpay/UPI); OAuth token verification for Google/Apple (email delivery
+- OAuth token verification for Google/Apple (email delivery
   via Resend and SMS OTP via Message Central are live with console fallbacks; Google
   sign-in stays 400 until a verifier is registered — see
   [`backend/docs/PACKAGE_AUTH.md`](../backend/docs/PACKAGE_AUTH.md))

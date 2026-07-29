@@ -33,8 +33,10 @@ Media uploads via
 **production refuses the local driver** — object storage only).
 Transactional email via the tiny **`package/mail`** (Resend REST, console
 fallback without a key; `PUBLIC_WEB_URL` adds deep links) — used by the
-order notifications. Planned (hooks already in place): Socket.IO
-(real-time), Google/Apple token verification, Razorpay/UPI payments.
+order notifications. Online payments via **Cashfree PG v4**
+(`modules/payments` — REST wrapper, no SDK; see
+`docs/CASHFREE_PAYMENTS.md`). Planned (hooks already in place): Socket.IO
+(real-time), Google/Apple token verification, Cashfree refunds.
 
 ---
 
@@ -92,7 +94,12 @@ backend/
 │   │   │                      #   (GET /orders) + seller dashboard
 │   │   │                      #   (GET /stores/:id/dashboard)
 │   │   ├── discovery/         # marketplace: global search + platform stats
-│   │   └── (orders, shipping, inventory, payments, settings, dashboard — planned)
+│   │   ├── payments/          # Cashfree gateway: cashfree.client.ts (PG v4
+│   │   │                      #   REST wrapper) + session create/retry +
+│   │   │                      #   HMAC-verified webhook + reconcile fallback
+│   │   │                      #   + session termination on seller cancel
+│   │   │                      #   (see docs/CASHFREE_PAYMENTS.md)
+│   │   └── (shipping, inventory, settings, dashboard — planned)
 │   ├── scripts/
 │   │   ├── createAdmin.ts     # Bootstrap an admin (npm run create-admin)
 │   │   └── backfillCatalog.ts # Slugs + price aggregates (npm run backfill-catalog)
@@ -443,9 +450,13 @@ White-label design — one codebase, any business:
   (`OrderFulfilment`: DELIVERY/PICKUP), the contact + delivery fields (all
   **nullable** — sellers choose what their checkout collects), money
   (subtotal/shipping/total), `paymentMethod` (ONLINE/COD/…),
-  `paymentStatus` and `paymentRef` (`"DEV-SIMULATED"` for development-mode
-  online payments — production refuses ONLINE with 503 until the gateway
-  lands). Items reference `StoreProduct`/`StoreProductVariant` (SetNull)
+  `paymentStatus`, `paymentRef` (Cashfree `cf_payment_id` once paid, or
+  `"DEV-SIMULATED"` when the gateway keys are absent in dev), plus the
+  gateway attempt fields `cfOrderId` (unique — the order id registered
+  with Cashfree, `orderNumber` or `orderNumber~R<n>` on retries) and
+  `paymentSessionId` (latest Cashfree session for the web SDK; see
+  `docs/CASHFREE_PAYMENTS.md`). Items reference
+  `StoreProduct`/`StoreProductVariant` (SetNull)
   and snapshot name/variant label/slug/cover `imageKey`/price, so history
   survives catalog edits and deletions. Order creation re-prices every
   line from the live catalog, enforces the seller's payment/shipping/
@@ -459,8 +470,10 @@ White-label design — one codebase, any business:
   stamps `confirmedAt`/`packedAt`/`shippedAt`/`deliveredAt`; delivering a
   COD order flips `paymentStatus` to PAID) and `POST …/cancel` (only before
   SHIPPED; stamps `cancelledAt` + optional `cancelReason`, **restores item
-  stock** and recomputes aggregates transactionally, flips a PAID —
-  dev-simulated — payment to REFUNDED). Both mutations use a guarded
+  stock** and recomputes aggregates transactionally, **terminates the
+  Cashfree order** of an unpaid ONLINE order so the returned stock can't
+  still be paid for, flips a PAID payment to REFUNDED — status only; the
+  Cashfree refund API call is a planned follow-up). Both mutations use a guarded
   `updateMany` re-checking the read status, so concurrent updates conflict
   (409) instead of double-applying.
 - **ShippingRule** — `FIXED` / `DISTRICT` / `STATE` / `FREE` with `priority`.
@@ -516,13 +529,18 @@ Enums: `ProductStatus`, `OrderStatus`, `PaymentMethod`, `PaymentStatus`, `Shippi
 | `npx prisma db push`  | Sync schema to the database                     |
 
 Key env vars. App-level (`config/env.ts`): `DATABASE_URL`, `DIRECT_URL`, `CORS_ORIGIN`,
-`TRUST_PROXY`, plus `HOST`/`PORT`/`LOG_LEVEL`. Mail-level
+`TRUST_PROXY`, plus `HOST`/`PORT`/`LOG_LEVEL`, and the Cashfree gateway set
+`CASHFREE_APP_ID` / `CASHFREE_SECRET_KEY` / `CASHFREE_ENV`
+(`sandbox`/`production`) / `CASHFREE_API_VERSION` (`2023-08-01`) /
+`PUBLIC_API_URL` (webhook `notify_url` origin) — see
+`docs/CASHFREE_PAYMENTS.md`. Mail-level
 (`package/mail/index.ts`): reuses `RESEND_API_KEY`/`EMAIL_FROM`, plus optional
 `PUBLIC_WEB_URL` (storefront origin for deep links in order emails).
 **Production fail-fast guards** — with `NODE_ENV=production` the server
 refuses to boot when: `DATABASE_URL`/`DIRECT_URL` missing, `CORS_ORIGIN="*"`,
 `OTP_BYPASS=true`, `AUTH_COOKIE_SECURE=false`, `JWT_SECRET` shorter than 32
-chars, or `STORAGE_DRIVER` is not `s3`. Auth-level, parsed by the package itself
+chars, `STORAGE_DRIVER` is not `s3`, or only one of the two Cashfree keys
+is set. Auth-level, parsed by the package itself
 (`package/auth/core/config/env.ts`): `JWT_SECRET` (required), `JWT_ACCESS_EXPIRES_IN`
 (access TTL, `15m`), `JWT_ADMIN_EXPIRES_IN` / `JWT_CUSTOMER_EXPIRES_IN` (**refresh**
 TTLs, `7d` / `30d`), `AUTH_COOKIE_SECURE` / `AUTH_COOKIE_SAMESITE` / `AUTH_COOKIE_DOMAIN`,
@@ -572,8 +590,11 @@ storefront checkout (**signed-in customers only** — placement runs behind
 order), re-pricing from the live catalog,
 enforcing the seller's payment/shipping/checkout-field configs, and
 decrementing stock transactionally. COD is live end-to-end; ONLINE payment
-is **simulated in development** (`paymentRef: "DEV-SIMULATED"`) and refused
-with 503 in production until the real gateway lands. The module also serves
+runs through **Cashfree** (`modules/payments` — session on placement,
+HMAC-verified webhook, reconcile fallback, pay/retry endpoint; see
+`docs/CASHFREE_PAYMENTS.md`) when the gateway keys are configured, and
+falls back to the dev **simulation** (`paymentRef: "DEV-SIMULATED"`) /
+production 503 without them. The module also serves
 the anonymous confirmation lookup, the customer's order history
 (`GET /orders`), the per-store **seller dashboard**
 (`GET /stores/:id/dashboard` — today's/pipeline counters, revenue, latest
@@ -586,18 +607,19 @@ Shipped / Delivered / Cancelled (customer) — a mail failure never fails
 the order flow.
 
 **Not yet (hooks in place):**
-1. **Online payment gateway** (Razorpay/UPI) — replaces the dev simulation;
-   order placement and confirmation lookup are live. Brings the real refund
-   flow (cancelling a paid order currently just marks REFUNDED, which today
-   can only hit dev-simulated payments).
+1. **Cashfree refunds** — cancelling a paid order marks REFUNDED (status
+   only); the actual refund API call is manual (Cashfree dashboard) until
+   wired. Also: automatic expiry/cancel sweep for abandoned unpaid ONLINE
+   orders (they hold stock until the seller cancels).
 2. Shipping-charge calculation (orders currently ship free), Inventory
    alerts, Banners, platform-admin dashboard.
 3. OAuth verification: Google (verifier currently unregistered — endpoints return 400)
    and Apple Sign-In. Email (Resend) + SMS (Message Central) delivery are DONE;
    adapters slot into `package/auth/providers/` — see
    [`backend/docs/PACKAGE_AUTH.md`](../backend/docs/PACKAGE_AUTH.md).
-4. Providers: payments (Razorpay/UPI). (Media storage is DONE —
+4. (Media storage is DONE —
    `package/storage` with S3 + local drivers powers store logos and product
-   images/videos; switch to S3 via `STORAGE_DRIVER=s3` + bucket env vars.)
+   images/videos; switch to S3 via `STORAGE_DRIVER=s3` + bucket env vars.
+   Payments provider is DONE — Cashfree, `modules/payments`.)
 5. Socket.IO real-time layer.
 6. Formal Prisma migrations for production.

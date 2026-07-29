@@ -145,6 +145,68 @@ export function notifyOrderPlaced(
   }
 }
 
+/**
+ * A gateway payment landed on an order the seller had ALREADY CANCELLED
+ * (the customer was mid-checkout when it was cancelled). The money is real
+ * and the order cannot be revived — its stock went back on sale — so both
+ * sides are told a refund is owed rather than "your order is placed".
+ * The seller must issue the refund from the Cashfree dashboard until the
+ * automatic refund call lands.
+ */
+export function notifyPaymentOnCancelledOrder(
+  order: OrderMailData,
+  customerId: string | null,
+  sellerEmail: string | null,
+): void {
+  void (async () => {
+    const to = await customerAddress(order, customerId);
+    if (!to) return;
+    const orderUrl = publicWebUrl
+      ? `${publicWebUrl}/order/${order.storeSlug}/${order.id}`
+      : null;
+    await sendMail({
+      to,
+      subject: `Refund on the way for order ${order.orderNumber}`,
+      text: `Hi${order.customerName ? ` ${order.customerName}` : ""},\n\nYour payment of ${formatTotal(order.total)} for order ${order.orderNumber} went through, but ${order.storeName} had already cancelled the order — so it will not be fulfilled and your payment will be refunded in full.\n\nRefunds usually reach your account within 5–7 working days.${orderUrl ? `\n\nView your order: ${orderUrl}` : ""}`,
+      html: wrapHtml(
+        "Your payment will be refunded",
+        `<p style="margin:0;font-size:14px;color:#444">
+           Your payment of <strong>${formatTotal(order.total)}</strong> for order
+           <strong>${order.orderNumber}</strong> went through, but
+           <strong>${order.storeName}</strong> had already cancelled the order.
+           It will not be fulfilled and your payment will be refunded in full.</p>
+         <p style="margin:12px 0 0;font-size:13px;color:#444">
+           Refunds usually reach your account within 5–7 working days.</p>
+         ${orderUrl ? linkHtml(orderUrl, "View your order") : ""}`,
+      ),
+    });
+  })().catch(logFailure("customer payment on cancelled order"));
+
+  if (sellerEmail) {
+    void (async () => {
+      const manageUrl = publicWebUrl
+        ? `${publicWebUrl}/stores/${order.storeSlug}/orders/${order.id}`
+        : null;
+      await sendMail({
+        to: sellerEmail,
+        subject: `Refund required — payment received on cancelled order ${order.orderNumber}`,
+        text: `A payment of ${formatTotal(order.total)} was received for order ${order.orderNumber}, which you had already cancelled.\n\nThe customer was completing payment when the order was cancelled. The order stays cancelled and its stock is back on sale, but the money HAS been captured.\n\nRefund it from your Cashfree dashboard.${manageUrl ? `\n\nOrder details: ${manageUrl}` : ""}`,
+        html: wrapHtml(
+          "Refund required",
+          `<p style="margin:0;font-size:14px;color:#444">
+             A payment of <strong>${formatTotal(order.total)}</strong> was received for order
+             <strong>${order.orderNumber}</strong>, which you had already cancelled.</p>
+           <p style="margin:12px 0 0;font-size:13px;color:#444">
+             The customer was completing payment when the order was cancelled. The order
+             stays cancelled and its stock is back on sale, but the money
+             <strong>has been captured</strong> — refund it from your Cashfree dashboard.</p>
+           ${manageUrl ? linkHtml(manageUrl, "View the order") : ""}`,
+        ),
+      });
+    })().catch(logFailure("seller payment on cancelled order"));
+  }
+}
+
 /** Customer-facing copy per status the seller can move an order to. */
 const STATUS_MAIL: Record<
   string,

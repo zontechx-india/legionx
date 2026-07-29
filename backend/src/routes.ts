@@ -18,6 +18,7 @@ import {
   publicOrderRoutes,
   customerOrderRoutes,
 } from "./modules/orders/orders.routes.js";
+import { paymentRoutes } from "./modules/payments/payments.routes.js";
 
 /**
  * Central route registrar.
@@ -48,6 +49,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       await api.register(publicOrderRoutes, { prefix: "/public/stores" });
       // Marketplace discovery — global search + platform stats (homepage).
       await api.register(publicDiscoveryRoutes, { prefix: "/public" });
+      // Payment gateway callbacks (Cashfree webhook — signature-guarded).
+      await api.register(paymentRoutes, { prefix: "/payments" });
 
       // Upload rules (max sizes + allowed types) — read by clients so their
       // hints and pre-upload validation always match the server's env config.

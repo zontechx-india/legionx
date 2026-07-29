@@ -1,15 +1,24 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { FormEvent } from 'react'
 import { toApiError } from '../../../shared/auth/http'
+import { ImageCropDialog } from '../../../shared/media/ImageCropDialog'
+import {
+  acceptAttr,
+  ruleHint,
+  useMediaConfig,
+  validateFile,
+} from '../../../shared/media/mediaConfig'
 import { ErrorNote, TextField } from '../../../shared/ui/form'
 import { storesApi } from '../../features/stores/storesApi'
 import { ArrowLeftIcon, ImageIcon } from '../../layout/icons'
 
 /**
- * Create Store — deliberately minimal to reduce friction: just the name.
- * The image slot is a placeholder until S3 upload is integrated; the API
- * already accepts an optional logoUrl, so wiring it later is UI-only.
+ * Create Store — deliberately minimal to reduce friction: a name plus an
+ * optional logo. The upload endpoint is per-store (PUT /stores/:id/logo),
+ * so the logo is **staged locally** (validate → crop 1:1, same pipeline as
+ * Store Details) and uploaded right after the store is created. Everything
+ * remains editable afterwards from Store Details.
  */
 export function CreateStorePage() {
   const navigate = useNavigate()
@@ -17,6 +26,53 @@ export function CreateStorePage() {
   const [name, setName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
+
+  // Staged logo — cropped locally, uploaded once the store exists.
+  const config = useMediaConfig()
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [cropFile, setCropFile] = useState<File | null>(null)
+  const [logo, setLogo] = useState<{ blob: Blob; filename: string } | null>(null)
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
+
+  // Revoke the previous preview URL on replace and on unmount.
+  useEffect(
+    () => () => {
+      if (logoPreview) URL.revokeObjectURL(logoPreview)
+    },
+    [logoPreview],
+  )
+
+  /**
+   * This page is reached from several places (homepage "Sell on Unie Max" /
+   * Become a Seller, the account menu, the My Stores list), so Back returns
+   * to wherever the visitor actually came from. Fallback for a direct open
+   * (no in-app history, e.g. straight after login): the marketplace home.
+   */
+  const goBack = () => {
+    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0
+    if (idx > 0) navigate(-1)
+    else navigate('/')
+  }
+
+  const pick = (file: File | undefined) => {
+    if (!file || !config) return
+    setError(null)
+    const problem = validateFile(file, config.logo)
+    if (problem) return setError(problem)
+    setCropFile(file)
+  }
+
+  const stageLogo = (blob: Blob, filename: string) => {
+    setLogo({ blob, filename })
+    setLogoPreview(URL.createObjectURL(blob))
+    setCropFile(null)
+  }
+
+  const clearLogo = () => {
+    setLogo(null)
+    setLogoPreview(null)
+  }
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -26,22 +82,35 @@ export function CreateStorePage() {
     setBusy(true)
     try {
       const store = await storesApi.create({ name: name.trim() })
+      if (logo) {
+        // The store exists now — a failed logo upload must not strand the
+        // flow: continue to the manage page, where Store Details offers the
+        // same upload again.
+        setUploadingLogo(true)
+        try {
+          await storesApi.uploadLogo(store.id, logo.blob, logo.filename)
+        } catch {
+          /* retry available in Store Details */
+        }
+      }
       navigate(`/stores/${store.slug}`)
     } catch (err) {
       setError(toApiError(err).message)
       setBusy(false)
+      setUploadingLogo(false)
     }
   }
 
   return (
     <div className="mx-auto max-w-lg">
-      <Link
-        to="/stores"
+      <button
+        type="button"
+        onClick={goBack}
         className="inline-flex items-center gap-1.5 text-sm font-medium text-muted transition hover:text-fg"
       >
         <ArrowLeftIcon className="h-4 w-4" />
-        Back to stores
-      </Link>
+        Back
+      </button>
 
       <div className="mt-3 rounded-lg bg-surface p-5 shadow-floating sm:p-6">
         <h1 className="text-xl font-bold tracking-tight text-fg">
@@ -62,19 +131,50 @@ export function CreateStorePage() {
             autoFocus
           />
 
-          {/* Logo slot — becomes a real upload once S3 is integrated. */}
+          {/* Optional logo — staged locally, uploaded after creation. */}
           <div>
             <span className="mb-2 block text-sm font-medium text-muted">
               Store logo <span className="font-normal text-muted">(optional)</span>
             </span>
             <div className="flex items-center gap-4">
-              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-md border-2 border-dashed border-line bg-surface-alt text-muted">
-                <ImageIcon className="h-7 w-7" />
+              {logoPreview ? (
+                <img
+                  src={logoPreview}
+                  alt="Store logo preview"
+                  className="h-20 w-20 shrink-0 rounded-md border border-line object-cover"
+                />
+              ) : (
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-md border-2 border-dashed border-line bg-surface-alt text-muted">
+                  <ImageIcon className="h-7 w-7" />
+                </div>
+              )}
+              <div className="min-w-0">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => inputRef.current?.click()}
+                    disabled={busy || !config}
+                    className="h-9 rounded-md border border-line bg-surface px-3.5 text-sm font-semibold text-fg transition hover:bg-surface-alt disabled:cursor-not-allowed disabled:text-muted"
+                  >
+                    {logo ? 'Replace' : 'Choose Logo'}
+                  </button>
+                  {logo && (
+                    <button
+                      type="button"
+                      onClick={clearLogo}
+                      disabled={busy}
+                      className="h-9 rounded-md px-3 text-sm font-semibold text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:text-muted"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+                <p className="mt-1.5 text-xs text-muted">
+                  {config
+                    ? `Square logo · ${ruleHint(config.logo)}`
+                    : 'Loading…'}
+                </p>
               </div>
-              <p className="text-xs text-muted">
-                Logo upload is coming soon — you'll be able to add it from
-                the store settings.
-              </p>
             </div>
           </div>
 
@@ -85,10 +185,35 @@ export function CreateStorePage() {
             disabled={busy}
             className="h-12 w-full rounded-md bg-brand-gradient px-4 text-sm font-semibold text-brand-contrast shadow-floating transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-none disabled:bg-line disabled:text-muted"
           >
-            {busy ? 'Creating…' : 'Create Store'}
+            {busy
+              ? uploadingLogo
+                ? 'Uploading logo…'
+                : 'Creating…'
+              : 'Create Store'}
           </button>
         </form>
       </div>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept={config ? acceptAttr(config.logo) : 'image/*'}
+        className="hidden"
+        onChange={(e) => {
+          pick(e.target.files?.[0])
+          e.target.value = ''
+        }}
+      />
+
+      {cropFile && (
+        <ImageCropDialog
+          file={cropFile}
+          aspect={1}
+          title="Crop your logo"
+          onCancel={() => setCropFile(null)}
+          onCropped={stageLogo}
+        />
+      )}
     </div>
   )
 }

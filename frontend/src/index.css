@@ -202,6 +202,15 @@
     min-height: 100%;
   }
 
+  /* Global 90% scale (approved against browser zoom): every Tailwind size —
+   * text, spacing, heights, radii expressed in rem — derives from this root
+   * font size, so the whole app (storefront + admin) renders 10% more
+   * compact from one rule. Pixel values (borders, the 1920px shell cap) are
+   * deliberately unaffected. */
+  html {
+    font-size: 90%;
+  }
+
   body {
     margin: 0;
     background-color: var(--bg);

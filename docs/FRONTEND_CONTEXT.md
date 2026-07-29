@@ -245,8 +245,13 @@ Routes: `/stores` (select a store — clicking a card goes straight to its
 management page — or create; first-run empty state; each card shows the
 store's **Published/Draft** status chip and its public `/store/{slug}` path,
 so the list doubles as an at-a-glance health check), `/stores/new` (create:
-**name only**; its logo slot is a static placeholder — the logo is uploaded
-afterwards from Store Details, where the crop/upload pipeline is live), and
+name + an **optional logo** — picked, validated against the server's media
+config and cropped 1:1 **locally** (the shared `ImageCropDialog` pipeline),
+then uploaded to `PUT /stores/:id/logo` right after the store is created —
+an upload failure never strands the flow, Store Details offers the same
+upload again. Its **Back control is history-aware**: `navigate(-1)` when
+in-app history exists — the page is reached from the homepage, the account
+menu and the store list — falling back to `/` on a direct open), and
 `/stores/:storeSlug` — a Flipkart-account-style split
 **inside** the main outlet: `StoreManageLayout` renders a left section card
 (Dashboard / Orders / Store Details / Appearance / Homepage / Footer / Bank Accounts / Payments / Shipping / Checkout / Categories / Products) and the selected
@@ -856,6 +861,14 @@ red/orange `--primary` **`#ef443b`** (`colors.brand.primary`, drives CTAs and
 links); blue **`#1863dc`** (`colors.accent` / `colors.focusRing`) is reserved
 for focus rings and active states. Only colors present in the design system
 are used — never invent new ones.
+
+### Global scale
+
+The root font size is **90%** (`html { font-size: 90% }` in `index.css`) —
+an approved design decision matching 90% browser zoom. Every rem-derived
+Tailwind size (text, spacing, heights) scales with it across both apps;
+pixel values (borders, the 1920px shell cap) are unaffected. Don't
+compensate with larger per-component sizes — the compact scale is intended.
 
 ### Dark / light theming (runtime)
 

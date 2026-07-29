@@ -51,11 +51,14 @@ A single account can own multiple stores and switch between them.
   no stores (straight to the creation page) and "My Store" otherwise
   (select a store → its management page, or create another). The selection
   page shows a "Create Your First Store" empty state for first-timers.
-- **Create Store** — intentionally minimal to reduce friction: store name
-  only. The **logo** is uploaded afterwards from Store Details: pick an
-  image → crop it square → it uploads (with progress) to a dedicated
-  storage bucket; it can be replaced or removed at any time. Remaining
-  information is collected in future updates.
+- **Create Store** — intentionally minimal to reduce friction: a store
+  name plus an **optional logo** (pick an image → crop it square → it is
+  staged locally and uploaded the moment the store is created). The logo
+  can also be added, replaced or removed at any time from Store Details
+  (same pick → crop → upload pipeline, with progress, to a dedicated
+  storage bucket). Remaining information is collected in future updates.
+  The page's Back control returns to wherever the visitor came from
+  (homepage, account menu, or the store list).
 - **Store management** — a two-panel page (left: section list —
   Dashboard, Store Details, Appearance, Homepage, Footer, Bank Accounts, Payments, Shipping,
   Checkout, Categories, Products; right: the selected section), addressed

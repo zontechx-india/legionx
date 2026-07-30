@@ -1,11 +1,22 @@
 @import 'tailwindcss';
 
+/* `dark:` follows OUR mode switch (<html data-theme>), not the OS setting —
+ * Tailwind's default `prefers-color-scheme` rule would ignore the toggle.
+ * Use it only where a treatment must genuinely differ per scheme (e.g. the
+ * brand gold reads vibrant on a dark canvas but washes out on white);
+ * semantic tokens still handle everything that merely flips color. */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
 /* ------------------------------------------------------------------ *
  * anydesk design system (skillui) — theme layer
  *
- * Colors are the only themeable axis (dark default + light + per-store
+ * Colors are the only themeable axis (light default + dark + per-store
  * override on /store/{slug}). Typography, spacing, radius and shadows are
  * global tokens straight from the skill and never change per theme.
+ *
+ * The COLOR palette is an approved brand override of the skill's red — see
+ * the palette block below. Typography/spacing/radius/shadows still come
+ * from the skill unchanged.
  *
  * Semantic Tailwind utilities generated below:
  *   bg-bg · bg-surface · bg-surface-alt · bg-input · border-line
@@ -47,6 +58,9 @@
 
   /* Soft, even elevation — no offset so it sits equally on all four sides. */
   --shadow-floating: 0 0 12px 0 rgba(0, 0, 0, 0.06);
+  /* Hover elevation for interactive cards. Same zero-offset principle, just
+   * deeper and wider, so a lifted card gains weight rather than a drop shadow. */
+  --shadow-lifted: 0 0 24px 0 rgba(0, 0, 0, 0.13);
 }
 
 /* Color utilities bind to CSS vars so they flip at runtime (dark/light/store). */
@@ -72,57 +86,78 @@
   --color-info: var(--info);
 }
 
-/* Dark is the default theme. */
+/* ------------------------------------------------------------------ *
+ * Brand palette (approved override of the anydesk skill's red)
+ *
+ *   Primary #f5b400 · Hover #e0a000 · Dark #121212 · Background #f8f8f8
+ *   Surface #ffffff · Border #e8e8e8 · Text #1a1a1a · Secondary text #707070
+ *
+ * Light is the default scheme (the palette is light-first), so `:root`
+ * carries it — that is also what paints before JS runs, so there is no
+ * flash. `mode.ts` writes `data-theme` on <html>; only the seven neutrals
+ * flip, everything below the neutrals block is shared by both schemes.
+ * ------------------------------------------------------------------ */
 :root {
-  --bg: #000000;
-  --surface: #2e2e2e;
-  --surface-alt: #101010;
-  --input-bg: #000000;
-  --line: #1a1a1a;
-  --fg: #ffffff;
-  --fg-muted: #8c8c8c;
+  --bg: #f8f8f8;
+  --surface: #ffffff;
+  /* Recessed wells / hover tracks. Derived: distinct from BOTH the white
+   * surface and the canvas, so a well reads recessed on either. */
+  --surface-alt: #f1f1f1;
+  --input-bg: #ffffff;
+  --line: #e8e8e8;
+  --fg: #1a1a1a;
+  --fg-muted: #707070;
 
   /* invariants (identical across themes) */
-  --brand: #ef443b;
-  --brand-hover: #cd1a11;
-  --brand-contrast: #ffffff;
-  --cta-contrast: #ffffff;
-  --orange: #ff8a3d;
-  /* Signature red→orange brand gradient (app chrome only). */
-  --brand-gradient: linear-gradient(135deg, #ef443b 0%, #ff8a3d 100%);
+  --brand: #f5b400;
+  --brand-hover: #e0a000;
+  /* Text ON the brand color. The primary is a light gold, so this is the
+   * dark ink — white on #f5b400 is illegible (1.5:1). */
+  --brand-contrast: #121212;
+  --cta-contrast: #121212;
+  /* Lighter gold — the brand gradient's warm end. */
+  --gold-light: #ffd24d;
+  /* Signature gold brand gradient (app chrome only). */
+  --brand-gradient: linear-gradient(135deg, #f5b400 0%, #ffd24d 100%);
   --accent: #1863dc;
-  /* Metal-CTA fallbacks cut from the app brand red — store pages override
+  /* Metal-CTA fallbacks cut from the app brand gold — store pages override
    * these via storeVars() with the OWNER's colors; the fallbacks keep
    * metal CTAs rendering on store-themed-but-neutral pages (e.g. a /cart
-   * with no known store). Mirrors the storeVars() derivation for #ef443b. */
-  --brand-metal: linear-gradient(180deg, #f37872 0%, #ef443b 48%, #bf362f 100%);
-  --brand-metal-hover: linear-gradient(180deg, #f58b85 0%, #f0534b 48%, #d23c34 100%);
-  --brand-metal-edge: rgba(255, 255, 255, 0.34);
-  --brand-glow: 0 6px 18px -8px rgba(239, 68, 59, 0.65);
+   * with no known store). Mirrors the storeVars() derivation for #f5b400. */
+  --brand-metal: linear-gradient(180deg, #f8c947 0%, #f5b400 48%, #c49000 100%);
+  --brand-metal-hover: linear-gradient(180deg, #f9d161 0%, #f6ba14 48%, #d89e00 100%);
+  /* storeVars() picks the brighter edge for a LIGHT primary. */
+  --brand-metal-edge: rgba(255, 255, 255, 0.6);
+  --brand-glow: 0 6px 18px -8px rgba(245, 180, 0, 0.65);
   --success: #008000;
   --warning: #856404;
+  /* Independent of the brand now — danger stays red whatever the brand is. */
   --danger: #ef443b;
   --info: #0000ee;
   --overlay: rgba(0, 0, 0, 0.6);
 
-  color-scheme: dark;
-}
-
-:root[data-theme='light'] {
-  --bg: #f5f5f5;
-  --surface: #ffffff;
-  --surface-alt: #ffffff;
-  --input-bg: #ffffff;
-  --line: #d0d5d2;
-  --fg: #101010;
-  --fg-muted: #8c8c8c;
-
   color-scheme: light;
 }
 
+/* Dark scheme. Only #121212 is specified by the brand palette; the other six
+ * neutrals are derived from it (and the secondary text is lifted from #707070
+ * to #9a9a9a, which fails AA against #121212). */
+:root[data-theme='dark'] {
+  --bg: #121212;
+  --surface: #1e1e1e;
+  --surface-alt: #0c0c0c;
+  --input-bg: #1a1a1a;
+  --line: #2a2a2a;
+  --fg: #f8f8f8;
+  --fg-muted: #9a9a9a;
+
+  color-scheme: dark;
+}
+
 /* Brand gradient helpers — the one place a gradient is allowed (skill's
- * primary-orange-gradient). Solid brand tokens stay the default everywhere
- * else; use these only on hero surfaces, brand marks and primary CTAs. */
+ * primary-gradient slot, cut from the brand gold). Solid brand tokens stay the
+ * default everywhere else; use these only on hero surfaces, brand marks and
+ * primary CTAs. */
 @layer utilities {
   .bg-brand-gradient {
     background-image: var(--brand-gradient);

@@ -223,13 +223,21 @@ A single account can own multiple stores and switch between them.
   directly, no account needed.
 
   **Homepage** (`/store/{slug}`) — introduces the store rather than dumping a
-  grid: hero banner, **Shop by Category** cards, then the owner's
+  grid: hero banner, **Shop by Category**, then the owner's
   merchandising rows — **Featured Products**, **New Arrivals**, **Best
-  Sellers**. Each row shows **only** the products the owner ticked for it, and
-  a row with nothing ticked is simply not shown. Rows are capped at one row of
-  cards with a "View all" link. The owner controls both the **order** of these
-  homepage sections (including the hero) and whether each shows, by
-  drag-and-drop in the store's Homepage section — see Store Management.
+  Sellers**. Every section is an edge-to-edge **band** on alternating
+  backgrounds, so the page reads as one continuous shop rather than a stack of
+  floating boxes. The **hero** is a compact introduction (store name, what the
+  catalog holds, a Start Shopping button and a jump to the categories) with a
+  collage of the store's real product photos beside it on wide screens.
+  **Shop by Category** is a dense strip of text-only category tiles — name,
+  its subcategories and the product count, no decorative icons.
+  Each merchandising row shows **only** the products the owner ticked for it,
+  and a row with nothing ticked is simply not shown. Rows are capped at one
+  full row of cards (as many as the screen fits) with a "View all" link. The
+  owner controls both the **order** of these homepage sections (including the
+  hero) and whether each shows, by drag-and-drop in the store's Homepage
+  section — see Store Management.
 
   **Category page** (`/store/{slug}/category/{category}`) — breadcrumb,
   category title, subcategory chips, sort & filter bar, and a responsive
@@ -246,9 +254,11 @@ A single account can own multiple stores and switch between them.
   catalog in the same grid, or search it by name and description. This is the
   target of the header's **Shop** link and every "View all".
 
-  Listing cards show image, category, name, a "from" price, a stock badge
-  (In/Low/Out) and a **variant count** for products with options (never the
-  full option list). The **whole card is a link** to the product page — there
+  Listing cards are **compact** — image, category, name, a "from" price, a
+  stock badge (In/Low/Out) and a **variant count** for products with options
+  (never the full option list) — so a wide screen shows up to six per row
+  instead of a few oversized tiles. The **whole card is a link** to the
+  product page — there
   is no Add to Cart on a card, so every card looks the same whether or not the
   product has options; buying happens on the product page. Hovering lifts the
   card with an evenly-spread glow. Sorting: Newest, Popular,
@@ -368,8 +378,13 @@ sign-in moved to its own `/login` page.
   no global category page).
 - **Recent searches** — local to the browser, shown as chips, hidden when
   empty.
-- **New Stores** — newest **published** stores (by first-publish time);
-  empty state invites the visitor to be the first seller.
+- **New Stores** — newest **published** stores (by first-publish time),
+  shown as storefront-preview cards: a large banner from the store's own
+  products, its logo, the store name, a **star rating**, the product count
+  and a **Visit Store** button. The rating is a **placeholder** until the
+  review system exists — a store with no reviews says so rather than
+  showing invented stars. Empty state invites the visitor to be the first
+  seller.
 - **Recently Viewed** — stores the visitor opened before (local snapshots,
   published stores only), hidden when empty.
 - **My Stores** — shown only to owners: status chip + Manage shortcut +

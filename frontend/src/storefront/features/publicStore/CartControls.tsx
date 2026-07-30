@@ -179,20 +179,20 @@ export function StockBadge({ stock }: { stock: number }) {
   const level = stockLevel(stock)
   if (level === 'out') {
     return (
-      <span className="rounded-full bg-surface-alt px-2 py-0.5 text-[11px] font-semibold text-muted">
+      <span className="rounded-full bg-surface-alt px-1.5 py-0.5 text-[10px] font-semibold text-muted">
         Out of Stock
       </span>
     )
   }
   if (level === 'low') {
     return (
-      <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-semibold text-warning">
+      <span className="rounded-full bg-warning/15 px-1.5 py-0.5 text-[10px] font-semibold text-warning">
         Low Stock
       </span>
     )
   }
   return (
-    <span className="rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-semibold text-success">
+    <span className="rounded-full bg-success/15 px-1.5 py-0.5 text-[10px] font-semibold text-success">
       In Stock
     </span>
   )

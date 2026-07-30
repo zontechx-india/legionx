@@ -69,6 +69,28 @@ other pm2 apps (`ziktag-backend`, `track-user-backend`) are untouched.
 - `backend/.env` — copied from the local dev machine
   (`d:\Live Project\Client Project\Legionx\backend\.env`). Key values:
   `PORT=4000`, `HOST=0.0.0.0`, `STORAGE_DRIVER=s3`, Supabase `DATABASE_URL`.
+  **Two vars must NOT be copied verbatim** — they are localhost on the dev
+  machine and must point at the server's own domain:
+
+  | Var              | Local                   | Server                          |
+  | ---------------- | ----------------------- | ------------------------------- |
+  | `PUBLIC_WEB_URL` | `http://localhost:5173` | `https://uniemax.zontechx.com`  |
+  | `PUBLIC_API_URL` | (unset)                 | `https://uniemax.zontechx.com`  |
+
+  Both point at the **production** domain because one backend (`:4000`)
+  serves dev, prod and the `:8081` site — so the return URL can only match
+  one of them, and real customers must be the ones it matches. A payment
+  started on `dev.uniemax.zontechx.com` therefore returns the customer to
+  `uniemax.zontechx.com`; the order still resolves because both share one
+  database.
+
+  `PUBLIC_WEB_URL` builds the Cashfree `return_url` (a localhost value sends
+  paying customers to their own machine) and `PUBLIC_API_URL` builds the
+  webhook `notify_url`. After any `.env` re-upload, re-apply both and
+  restart pm2. Back up the previous file to `~/uniemax/backup/` first.
+  Note the local `.env` may have **no trailing newline** — append with
+  `printf '\n…'` or the new var lands on the last comment line and is
+  silently ignored.
 - `frontend/.env` — contains only `VITE_GOOGLE_MAPS_API_KEY`.
   `VITE_API_URL` is deliberately **unset** so the built app calls the API
   same-origin (`/api/...`), which nginx proxies to `127.0.0.1:4000`.

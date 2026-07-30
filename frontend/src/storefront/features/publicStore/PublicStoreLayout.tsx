@@ -107,13 +107,37 @@ export function PublicStoreLayout() {
       >
         {!store.isPublished && <DraftPreviewBanner storeSlug={store.slug} />}
         <StoreHeader store={store} skin={SKIN} />
-        {/* Full-bleed like a real shop — only a soft cap for ultrawides. */}
-        <main className="mx-auto w-full max-w-[1920px] flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-10">
+        {/* Truly full-bleed: each page brings its own container, so the
+            homepage can render edge-to-edge section bands while the inner
+            pages keep the standard padded column (`StorePageShell`). */}
+        <main className="flex-1">
           <Outlet />
         </main>
         <StoreFooter store={store} skin={SKIN} />
       </div>
     </Ctx.Provider>
+  )
+}
+
+/**
+ * Standard padded column for the inner storefront pages (category, product,
+ * shop). Full-bleed with a soft 1920px cap for ultrawides, exactly what
+ * `<main>` used to provide. The homepage deliberately opts out — it renders
+ * its own edge-to-edge section bands instead.
+ */
+export function StorePageShell({
+  children,
+  className = '',
+}: {
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <div
+      className={`mx-auto w-full max-w-[1920px] px-4 py-6 sm:px-6 sm:py-8 lg:px-10 ${className}`}
+    >
+      {children}
+    </div>
   )
 }
 

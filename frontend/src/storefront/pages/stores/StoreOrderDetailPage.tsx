@@ -74,7 +74,9 @@ function nextAction(
 const CANCELLABLE = new Set(['PENDING', 'CONFIRMED', 'PACKED'])
 
 export function StoreOrderDetailPage() {
-  const { store } = useManagedStore()
+  // `refreshDashboard` keeps the nav's pending-order badge (and the dashboard
+  // tiles) honest the moment this page moves an order along.
+  const { store, refreshDashboard } = useManagedStore()
   const { orderId = '' } = useParams()
 
   const [order, setOrder] = useState<PlacedOrder | null>(null)
@@ -110,6 +112,7 @@ export function StoreOrderDetailPage() {
     try {
       setOrder(await sellerOrderApi.updateStatus(store.id, order.id, action.status))
       setConfirming(null)
+      refreshDashboard()
     } catch (err) {
       setActionError(toApiError(err).message)
       setConfirming(null)
@@ -132,6 +135,7 @@ export function StoreOrderDetailPage() {
       )
       setConfirming(null)
       setCancelReason('')
+      refreshDashboard()
     } catch (err) {
       setActionError(toApiError(err).message)
       setConfirming(null)

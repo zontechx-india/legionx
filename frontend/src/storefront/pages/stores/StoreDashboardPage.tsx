@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { toApiError } from '../../../shared/auth/http'
 import { ErrorNote } from '../../../shared/ui/form'
-import { formatPrice, storesApi } from '../../features/stores/storesApi'
+import { formatPrice } from '../../features/stores/storesApi'
 import type { StoreDashboard } from '../../features/stores/storesApi'
 import { useManagedStore } from '../../features/stores/useManagedStore'
 import { CartIcon, ChevronRightIcon } from '../../layout/icons'
@@ -33,27 +32,19 @@ const PIPELINE: {
 ]
 
 export function StoreDashboardPage() {
-  const { store } = useManagedStore()
+  // The layout owns this data — it also feeds the Orders badge in the nav, and
+  // keeping it there means re-entering this section is instant instead of
+  // re-fetching (see ManagedStoreContext).
+  const { store, dashboard, dashboardError: error, refreshDashboard } =
+    useManagedStore()
 
-  const [dashboard, setDashboard] = useState<StoreDashboard | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
+  // Snapshot at mount: with data already in hand we are RE-entering the
+  // section, so pull a fresh copy. Empty means the layout's own initial load
+  // is already in flight — asking again would just duplicate it.
+  const reEntered = useRef(dashboard !== null)
   useEffect(() => {
-    let cancelled = false
-    setDashboard(null)
-    setError(null)
-    storesApi
-      .getDashboard(store.id)
-      .then((data) => {
-        if (!cancelled) setDashboard(data)
-      })
-      .catch((err) => {
-        if (!cancelled) setError(toApiError(err).message)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [store.id])
+    if (reEntered.current) refreshDashboard()
+  }, [refreshDashboard])
 
   return (
     <div>
@@ -80,8 +71,10 @@ export function StoreDashboardPage() {
         <div className="mt-5 space-y-5">
           {/* Headline tiles */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <div className="rounded-lg bg-brand/10 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-brand">
+            {/* Same scheme rule as the section nav: gold label on the dark
+                canvas, gold edge + ink label on white. */}
+            <div className="rounded-lg border-l-[3px] border-brand bg-brand/10 p-4 dark:border-transparent">
+              <p className="text-xs font-semibold uppercase tracking-wide text-fg dark:text-brand">
                 Today's Orders
               </p>
               <p className="mt-1 text-3xl font-bold text-fg">

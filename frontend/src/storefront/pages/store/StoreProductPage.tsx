@@ -8,9 +8,12 @@ import {
   type PublicProductDetail,
   type PublicStoreVariant,
 } from '../../features/stores/storesApi'
-import { usePublicStore } from '../../features/publicStore/PublicStoreLayout'
+import {
+  StorePageShell,
+  usePublicStore,
+} from '../../features/publicStore/PublicStoreLayout'
 import { usePageTitle } from '../../../shared/usePageTitle'
-import { ProductCard } from '../../features/publicStore/ProductCard'
+import { ProductGrid } from '../../features/publicStore/ProductCard'
 import { ShareButton } from '../../features/publicStore/ShareButton'
 import {
   AddToCartControl,
@@ -57,25 +60,31 @@ export function StoreProductPage() {
   }, [store.slug, productSlug])
 
   if (product === undefined) {
-    return <p className={`py-16 text-center text-sm ${skin.muted}`}>Loading…</p>
+    return (
+      <StorePageShell>
+        <p className={`py-16 text-center text-sm ${skin.muted}`}>Loading…</p>
+      </StorePageShell>
+    )
   }
 
   if (product === null) {
     return (
-      <div className="py-16 text-center">
-        <h1 className={`font-heading text-lg font-bold ${skin.text}`}>
-          Product not found
-        </h1>
-        <p className={`mt-2 text-sm ${skin.muted}`}>
-          It may be out of stock or no longer available.
-        </p>
-        <Link
-          to={`/store/${store.slug}`}
-          className={`mt-5 inline-flex h-10 items-center rounded-md px-5 text-sm font-bold ${skin.cta}`}
-        >
-          Back to store
-        </Link>
-      </div>
+      <StorePageShell>
+        <div className="py-16 text-center">
+          <h1 className={`font-heading text-lg font-bold ${skin.text}`}>
+            Product not found
+          </h1>
+          <p className={`mt-2 text-sm ${skin.muted}`}>
+            It may be out of stock or no longer available.
+          </p>
+          <Link
+            to={`/store/${store.slug}`}
+            className={`mt-5 inline-flex h-10 items-center rounded-md px-5 text-sm font-bold ${skin.cta}`}
+          >
+            Back to store
+          </Link>
+        </div>
+      </StorePageShell>
     )
   }
 
@@ -111,7 +120,7 @@ function ProductDetail({ product }: { product: PublicProductDetail }) {
   ]
 
   return (
-    <div>
+    <StorePageShell>
       <Breadcrumb
         storeSlug={store.slug}
         storeName={store.name}
@@ -228,21 +237,14 @@ function ProductDetail({ product }: { product: PublicProductDetail }) {
       </div>
 
       {product.related.length > 0 && (
-        <section className="mt-16">
+        <section className="mt-12">
           <SectionHeading title="Related Products" skin={skin} />
-          <ul className="mt-5 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
-            {product.related.map((item) => (
-              <ProductCard
-                key={item.id}
-                store={store}
-                product={item}
-                skin={skin}
-              />
-            ))}
-          </ul>
+          <div className="mt-4">
+            <ProductGrid store={store} products={product.related} skin={skin} />
+          </div>
         </section>
       )}
-    </div>
+    </StorePageShell>
   )
 }
 

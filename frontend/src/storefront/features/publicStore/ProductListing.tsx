@@ -12,6 +12,7 @@ import {
   type Crumb,
 } from './ListingControls'
 import { useProductQuery } from './useProductQuery'
+import { StorePageShell } from './PublicStoreLayout'
 import type { Skin } from './storeTheme'
 
 /**
@@ -69,7 +70,7 @@ export function ProductListing({
   }
 
   return (
-    <div>
+    <StorePageShell>
       <Breadcrumb
         storeSlug={store.slug}
         storeName={store.name}
@@ -129,6 +130,6 @@ export function ProductListing({
         onApply={setFilters}
         skin={skin}
       />
-    </div>
+    </StorePageShell>
   )
 }

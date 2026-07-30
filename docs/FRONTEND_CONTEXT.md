@@ -108,10 +108,14 @@ for guests and signed-in customers alike and adapts per session state.
   don't exist in the marketplace router, so a client-side navigate would
   hit its catch-all.
 - **`pages/HomePage.tsx`** (marketplace, replaces the old dashboard landing):
-  own chrome (sticky header: brand · **global search centered in the
-  toolbar** on md+, dropping to its own row under the bar below md ·
-  "Sell on Unie Max" link (lg+) · theme toggle · cart link with count ·
-  Sign in / `AccountMenu`), **full-bleed** like the storefront
+  own chrome — a deliberately **airy** sticky header (`h-16`, `md:h-20`) laid
+  out as four zones separated by large gaps (`gap-5` → `lg:gap-12`) rather
+  than a dense cluster: brand (logo `h-10`/`md:h-12` + `text-xl`/`sm:text-2xl`
+  wordmark) · **global search centered in the toolbar** on md+, dropping to
+  its own row under the bar below md · "Sell on Unie Max" link (lg+) · then
+  the utilities (theme toggle · cart link with count · Sign in /
+  `AccountMenu`, all `h-10`, `gap-3` → `lg:gap-6`; the old hairline separator
+  was removed — the gap does that job). **Full-bleed** like the storefront
   (`max-w-[1920px]` soft cap, `lg:px-10`; card grids run 2→3→4→5 columns).
   Sections render as **full-bleed alternating bands** (base canvas / `alt`
   surface tone + a bottom `border-line` divider, compact `py-8/10`) — the
@@ -126,9 +130,21 @@ for guests and signed-in customers alike and adapts per session state.
   across stores; tapping a chip pre-fills and focuses the global search
   via a tiny module-level search-intent bus; the strip renders nothing
   while loading/failed/empty); **New Stores**
-  (merchandise-first cards: 3-tile preview strip of product covers from
-  the API's `previewImages`, then logo · Oswald name · `productCount` —
-  no raw slugs, no per-card CTA, the whole card is the link);
+  (**storefront-preview cards**: a 16:9 banner cut from the first of the
+  API's `previewImages` (with a gradient foot **only when there is a real
+  photo** — over the icon fallback it read as a grey smear), the store logo
+  as a round badge straddling the banner edge at the **left**, then a
+  left-aligned Oswald name and **star-rating slot**, and a full-width
+  footer row above a divider: `productCount` anchored left, a **Visit
+  Store →** pill right — a centred column left both margins empty. The
+  card body must stay `relative`: the banner above it is positioned, so
+  otherwise the overlapping logo paints underneath the image. The
+  whole card is still one link — the CTA is a styled `<span>`, never a
+  nested `<a>`, so there is no second tab stop. **The rating is a
+  placeholder**: there is no review system yet, so `StoreRating` renders
+  muted outline stars + "No reviews yet" rather than fabricating stars for
+  shoppers, and lights up unchanged the moment the API returns
+  `rating`/`reviewCount`);
   **Fresh Finds** (`GET /public/products`, newest 12 platform-wide,
   product cards with image / store / name / price on a denser grid than
   the store cards — 2→3→4→5→6 columns, 4-up from `lg`; section hides while
@@ -254,14 +270,47 @@ in-app history exists — the page is reached from the homepage, the account
 menu and the store list — falling back to `/` on a direct open), and
 `/stores/:storeSlug` — a Flipkart-account-style split
 **inside** the main outlet: `StoreManageLayout` renders a left section card
-(Dashboard / Orders / Store Details / Appearance / Homepage / Footer / Bank Accounts / Payments / Shipping / Checkout / Categories / Products) and the selected
-section in a right card via a nested `<Outlet/>` (children read the loaded
-store through `useManagedStore()` outlet context). Management URLs use the
-store's **slug** (the backend resolves id or slug interchangeably).
+and the selected section in a right card via a nested `<Outlet/>` (children
+read the loaded store through `useManagedStore()` outlet context).
+Management URLs use the store's **slug** (the backend resolves id or slug
+interchangeably).
+
+The section list is **grouped by what the seller is doing** (`SECTION_GROUPS`),
+because a flat list of twelve made a once-ever setting look as important as a
+daily job — captions only, **deliberately not collapsible** (twelve items over
+four groups fit on screen; an accordion would add a click before every
+navigation and hide the item being hunted for):
+
+| Group | Sections |
+| ----- | -------- |
+| **Overview** | Dashboard · Orders *(pending-count badge)* |
+| **Catalog** | Categories · Products |
+| **Storefront** | Store Details · Appearance · Homepage · Footer |
+| **Settings** | Payments · Bank Accounts · Shipping · Checkout |
+
+Ordering rationale, so it isn't re-shuffled by accident: Catalog leads because
+Products is the most-opened section after Orders (it used to sit last);
+Categories precedes Products because the app gates Products until a category
+exists; **Storefront** is what a customer sees (safe to experiment with) while
+**Settings** is money + fulfilment (three of which confirm before saving);
+Store Details is branding rather than configuration, so it sits under
+Storefront; and Payments precedes Bank Accounts because payout accounts only
+matter once online payment is on.
 
 **Dashboard** (`StoreDashboardPage`, the manage landing at
 `/stores/{slug}`; Store Details moved to `/stores/{slug}/details`) — over
-`GET /stores/:id/dashboard`: Today's Orders / Total Orders / Revenue
+`GET /stores/:id/dashboard`, **fetched by the layout, not the page**
+(`ManagedStoreContext.dashboard` / `dashboardError` / `refreshDashboard`),
+because the nav's Orders badge needs the same counters. The layout outlives
+section navigation, so this is one request per management session instead of
+one per visit to the Dashboard, and re-entering the section renders instantly
+from context. `refreshDashboard()` coalesces concurrent callers and discards
+responses for a store the seller has since left; the Dashboard page calls it
+only on **re-entry** (a mount-time snapshot of whether data is already in
+hand — otherwise it would duplicate the layout's initial load), and
+`StoreOrderDetailPage` calls it after a status change or cancellation so the
+badge and tiles never lag the order they describe. It renders: Today's
+Orders / Total Orders / Revenue
 tiles, the order pipeline (Pending / Processing / Shipped / Completed /
 Cancelled / Refunded — each tile deep-links into the Orders section
 filtered to its status; Processing spans two statuses so it links to the
@@ -324,7 +373,10 @@ scales from a few products to thousands:
 (`GET /api/v1/public/stores/:slug` — branding, theme and the category tree,
 **no products**) and shares it with every child route via `usePublicStore()`,
 so moving between pages never refetches the chrome. It applies `storeVars()`
-and renders `StoreHeader` + `<Outlet/>` + `StoreFooter`.
+and renders `StoreHeader` + `<Outlet/>` + `StoreFooter`. `<main>` is
+**edge-to-edge** and carries no padding of its own: inner pages wrap
+themselves in the exported **`StorePageShell`** (the 1920px-capped padded
+column), which lets the homepage render full-bleed section bands instead.
 
 - **`StoreFooter`** (`features/publicStore/StoreFooter.tsx`) — renders the
   owner's Footer settings from the shell (`store.footer`): brand block (logo +
@@ -350,15 +402,34 @@ and renders `StoreHeader` + `<Outlet/>` + `StoreFooter`.
   uses. Nav items whose
   features don't exist yet (Offers, Track Order, About, Contact) are
   deliberately absent rather than rendered as dead links.
-- **`StoreHomePage`** — hero, Featured Categories cards, then the
+- **`StoreHomePage`** — hero, Shop by Category, then the
   merchandising rows (Featured / New Arrivals / Best Sellers) from
   `GET …/home`. Sections render in the **owner-arranged order** (the payload's
-  ordered `sections` list); each is skipped when disabled or empty. Each row is
-  capped at **one row of cards (4)** with a "View all →" link **scoped to that
-  section** (`/shop?section=featured|newArrivals|bestSellers`), so the homepage
-  stays a summary and never strands an orphan card on a second row. Rows are
-  **strictly flag-driven** (a product shows only in the sections its owner
-  ticked) and a row with nothing ticked is not rendered at all.
+  ordered `sections` list); each is skipped when disabled or empty. Every
+  section is a **full-bleed band** (alternating page-canvas / surface tone plus
+  a bottom `border-line` divider, compact `py-8/10`) exactly like the
+  marketplace homepage — separation comes from the background change, not from
+  large gaps, and the band lives inside the section so a hidden one leaves no
+  empty strip. Sections are filtered for *content* before the tones are
+  assigned, so the alternation never breaks on an empty row.
+  - **Hero** — sized like the marketplace hero (`text-3xl sm:text-5xl`,
+    `py-8/10`) rather than the old tall rounded card: eyebrow, store name,
+    the product/category count line, a Start Shopping CTA and — only when the
+    categories band is actually on the page — a `#shop-by-category` anchor
+    button. On `lg+` an offset two-column **collage of the store's real
+    product covers** (max 4, deduped from the merchandising rows, decorative
+    `alt=""`, skipped below 2 covers). Keeps the radial brand wash.
+  - **Shop by Category** — deliberately **icon-free, text-only** tiles: name,
+    the subcategory line and the product count in a compact row
+    (`px-3.5 py-3`), six across on a wide screen. The old circular
+    `TagIcon` badge and its tall padding are gone.
+  - **Product rows** — `ROW_SIZE = 6` fetched, but `ROW_VISIBILITY` hides the
+    surplus per breakpoint (`hidden md:list-item` …) so **every** breakpoint
+    paints exactly one full row — 2 → 3 → 4 → 5 → 6 cards — and never strands
+    an orphan. Each carries a "View all →" link **scoped to that section**
+    (`/shop?section=featured|newArrivals|bestSellers`). Rows are
+    **strictly flag-driven** (a product shows only in the sections its owner
+    ticked) and a row with nothing ticked is not rendered at all.
 - **`StoreCategoryPage`** — breadcrumb, title, subcategory chips, then the
   shared `ProductListing`.
 - **`StoreShopPage`** — browse-all listing; `?q=` turns it into search
@@ -394,8 +465,11 @@ and renders `StoreHeader` + `<Outlet/>` + `StoreFooter`.
   Variants Available"** (never the options themselves). Hover applies `metal-lift`:
   a small rise plus an **evenly-spread halo** (zero-offset shadow, so it
   radiates equally on all four sides rather than pooling underneath) and the
-  name shifts to the brand color. Open-ended grids run 2 → 3 → 4 → **5
-  columns (2xl)** across the full-bleed layout; homepage rows stay at 4.
+  name shifts to the brand color. The card is deliberately **compact**
+  (`p-2`/`p-3`, `rounded-lg`, `text-sm sm:text-base` name) so the full-bleed
+  layout carries dense rows instead of four oversized cards: the shared
+  `PRODUCT_GRID` ramp (exported here, also used by `GridSkeleton` and the
+  homepage rows) runs 2 → 3 → 4 → 5 → **6 columns (2xl)**.
 - **`FilterPanel`** — right slide-over on desktop, bottom sheet on mobile:
   Availability + Price Range live; Brand/Rating/Discount shown "Soon".
 
@@ -856,11 +930,22 @@ hardcoding colors, fonts, spacing, radii, or shadows:
 | `shadows.ts`    | `shadows` (`floating`, `glowRed`)                             |
 | `index.ts`      | barrel — re-exports all + a `theme` aggregate object          |
 
-Accent convention (resolved from the design system): the brand color is the
-red/orange `--primary` **`#ef443b`** (`colors.brand.primary`, drives CTAs and
-links); blue **`#1863dc`** (`colors.accent` / `colors.focusRing`) is reserved
-for focus rings and active states. Only colors present in the design system
-are used — never invent new ones.
+Accent convention: the brand color is the gold **`#f5b400`**
+(`colors.brand.primary`, drives CTAs and links) with hover **`#e0a000`**;
+blue **`#1863dc`** (`colors.accent` / `colors.focusRing`) is reserved for
+focus rings and active states. **Color is the one deliberate deviation from
+the skill** (an approved brand palette replacing its red) — structure,
+spacing, radius, shadows and the type scale still come from skillui
+unchanged, and no colors outside the palette below are invented.
+
+Because the gold is a **light** color, text placed on it is the dark ink
+`#121212` (`--brand-contrast` / `--cta-contrast`), never white. `--danger`
+is now independent of the brand and stays red `#ef443b`.
+
+> ⚠️ `src/index.css` is the **runtime source of truth** for every color.
+> `shared/theme/colors.ts` mirrors the same values as typed constants for
+> JS-side consumers, but no component reads it — editing it alone changes
+> nothing on screen. Keep the two in step.
 
 ### Global scale
 
@@ -870,7 +955,7 @@ Tailwind size (text, spacing, heights) scales with it across both apps;
 pixel values (borders, the 1920px shell cap) are unaffected. Don't
 compensate with larger per-component sizes — the compact scale is intended.
 
-### Dark / light theming (runtime)
+### Light / dark theming (runtime)
 
 **Colors are the only themeable axis** — typography, spacing, radius and
 shadows are global skill tokens and never change. `index.css` defines the
@@ -882,13 +967,55 @@ whole palette as CSS variables and maps them into Tailwind v4 via
 | `bg-bg` | page canvas | `text-fg` | primary text |
 | `bg-surface` | cards / panels / bars | `text-muted` | secondary text |
 | `bg-surface-alt` | wells / hover tracks | `border-line` | borders / dividers |
-| `bg-input` | input fields | `bg-brand` / `text-brand` | CTAs / links (red) |
-| `text-brand-contrast` | text on brand | `bg-accent` / `text-accent` | focus / active (blue) |
+| `bg-input` | input fields | `bg-brand` / `text-brand` | CTAs / links (gold) |
+| `text-brand-contrast` | text on brand (dark ink) | `bg-accent` / `text-accent` | focus / active (blue) |
 | `text-danger` / `success` / `warning` | status | `shadow-floating` | elevation |
 | `rounded-md` (4px) · `rounded-lg` (6px) · `rounded-pill` (50px) | radius | `font-heading` / `font-body` | Oswald / Inter |
 
-- **Brand gradient.** The skill's signature red→orange brand treatment
-  (`--brand-gradient`: `#ef443b`→`#ff8a3d`) is exposed as two utilities —
+**Card hover language** (marketplace grids): `shadow-floating` at rest →
+`hover:-translate-y-1` (4px lift) + `hover:shadow-lifted` (the deeper
+zero-offset halo token) + `group-hover:scale-105` on the image, over
+`duration-200` / `duration-500`. Store cards, product cards and the
+Recently-Viewed pills all share it. (Per-store pages keep `metal-lift`
+instead — that halo is tinted from the owner's own color.)
+
+**`dark:` variant.** `index.css` declares
+`@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *))`,
+so `dark:` follows **our** toggle rather than Tailwind's default
+`prefers-color-scheme` (which would ignore it entirely). Reach for it **only
+where a treatment must genuinely differ per scheme** — semantic tokens already
+cover everything that merely changes color. It compiles inside `:where()`, so
+it carries no extra specificity and wins purely on source order (Tailwind emits
+variants after their base utilities, which is what makes `text-fg
+dark:text-brand` resolve correctly).
+
+The one place it is used today is the **selected-state rule on
+`/stores/{slug}`**: the brand gold reads vibrant on the dark canvas (10:1) but
+drops to ~1.9:1 on white, so the highlight swaps carrier by scheme — in dark
+the **label** is gold; in light a solid gold **left bar** marks the row and the
+label stays ink (`border-brand … text-fg dark:border-transparent
+dark:text-brand`, on the section nav and the Today's Orders tile). Every nav
+row carries a transparent left border so the text never shifts on selection.
+
+**The seven neutrals are the only values that flip**; brand, accent and
+status live once on `:root` and are shared by both schemes.
+
+| Var (utility) | Light (default) | Dark |
+| ------------- | --------------- | ---- |
+| `--bg` (`bg-bg`) | `#f8f8f8` | `#121212` |
+| `--surface` (`bg-surface`) | `#ffffff` | `#1e1e1e` |
+| `--surface-alt` (`bg-surface-alt`) | `#f1f1f1` | `#0c0c0c` |
+| `--input-bg` (`bg-input`) | `#ffffff` | `#1a1a1a` |
+| `--line` (`border-line`) | `#e8e8e8` | `#2a2a2a` |
+| `--fg` (`text-fg`) | `#1a1a1a` | `#f8f8f8` |
+| `--fg-muted` (`text-muted`) | `#707070` | `#9a9a9a` |
+
+Only `#121212` was specified for the dark scheme; the other six are derived
+from it, and the secondary text is lifted to `#9a9a9a` because `#707070`
+fails AA against `#121212`.
+
+- **Brand gradient.** The signature gold brand treatment
+  (`--brand-gradient`: `#f5b400`→`#ffd24d`) is exposed as two utilities —
   `bg-brand-gradient` (hero surfaces, brand logo/avatar marks, **primary
   CTAs**) and `text-brand-gradient` (gradient display text, e.g. the auth
   hero accent). Solid `bg-brand`/`text-brand` stays the default for chips,
@@ -898,8 +1025,10 @@ whole palette as CSS variables and maps them into Tailwind v4 via
   (see *Metal accents* below), never this brand one.
   Gradient CTAs use `hover:opacity-90` and `disabled:bg-none` (so the muted
   disabled color shows through).
-- **Dark is the default.** The mode lives on `<html data-theme>`; `:root`
-  holds the dark values, `:root[data-theme='light']` the light overrides.
+- **Light is the default** (the brand palette is light-first). The mode lives
+  on `<html data-theme>`; `:root` holds the light values — so the pre-JS paint
+  already matches the default and never flashes — and
+  `:root[data-theme='dark']` carries the dark overrides.
 - `shared/theme/mode.ts` persists the choice to `localStorage`
   (`uniemax-theme`) and applies it; `initThemeMode()` runs in each
   `main.tsx` before render (no flash). `ThemeProvider` exposes
@@ -992,10 +1121,12 @@ mini-preview built from the same semantics, so the preview is a true
 miniature.
 
 **Layout width.** Storefront pages are **full-bleed** like a real shop — the
-header, main and footer share `max-w-[1920px]` (a soft cap for ultrawides
-only) with `lg:px-10` padding, instead of a centered column. Open-ended
-product grids run 2 → 3 → 4 → **5 columns (2xl)**; the homepage merchandising
-rows stay capped at 4 because `ROW_SIZE = 4` fills that row exactly.
+header, footer and each page's `StorePageShell` share `max-w-[1920px]` (a soft
+cap for ultrawides only) with `lg:px-10` padding, instead of a centered column.
+`<main>` itself is unpadded so the homepage's section bands can run truly
+edge-to-edge. Open-ended product grids run 2 → 3 → 4 → 5 → **6 columns (2xl)**;
+the homepage merchandising rows use the same ramp and hide the surplus per
+breakpoint, so each row is always exactly full.
 
 ---
 

@@ -36,8 +36,14 @@ live in [API.md](./API.md), module conventions in
 **Both keys unset = gateway off**, which reproduces the pre-gateway
 behavior exactly: development *simulates* ONLINE payments
 (`paymentRef: "DEV-SIMULATED"`, instantly PAID) and production refuses them
-with `503`. Setting **sandbox keys in development** exercises the real flow
-end-to-end. Production boot fails fast if only one of the two keys is set.
+with `503`. Production boot fails fast if only one of the two keys is set.
+
+> ⚠️ **Sandbox is no longer used anywhere (since 2026-07-30).** Every
+> environment — local, `dev.uniemax.zontechx.com`, and
+> `uniemax.zontechx.com` — runs `CASHFREE_ENV=production` with the live
+> merchant keys, and all three share one backend (`:4000`) and one database.
+> **Any order placed in any environment charges a real card**, including
+> test orders on the dev domain. Refunds are still manual (see Known gaps).
 
 ## Payment flow (create order)
 
@@ -169,17 +175,22 @@ and is not counted as `REFUNDED` until the refund actually happens.
 | `cfOrderId`        | `order_id` registered with Cashfree for the latest attempt         |
 | `paymentSessionId` | Latest `payment_session_id` (drives the web SDK)                   |
 
-## Testing (sandbox)
+## Testing
 
-1. Set sandbox `CASHFREE_APP_ID` / `CASHFREE_SECRET_KEY` (+
-   `PUBLIC_WEB_URL=http://localhost:5173`) in `backend/.env`, restart.
-2. Place an ONLINE order at a store with online payment enabled — the
-   hosted sandbox checkout opens.
-3. Pay with Cashfree's test instruments (e.g. test UPI `testsuccess@gocash`,
-   or the test cards from the Cashfree docs).
-4. You land back on the order page; within a few polls it flips to
-   **Paid online** via the reconcile fallback (or instantly via the webhook
-   if the URL is publicly reachable/tunneled).
+**There is no non-charging environment any more.** With production keys
+everywhere, placing an ONLINE order and completing it moves real money, and
+the refund has to be issued by hand from the Cashfree dashboard. Test with
+the smallest possible amount, and prefer verifying the parts that do not
+require payment:
+
+- **Credential/account check** — creating a Cashfree order does *not* charge
+  anyone; only paying does. A create-order call that returns
+  `order_status: ACTIVE` proves the keys and the merchant account are live.
+- **Webhook check** — `POST` an unsigned body to the webhook URL; a `401`
+  proves it is reachable and the signature check is enforced.
+- To get a non-charging environment back, restore the sandbox pair from
+  `~/uniemax/backup/env.predeploy-cashfree` on the server (or the Cashfree
+  dashboard) and set `CASHFREE_ENV=sandbox`.
 
 ## Known gaps / next milestones
 

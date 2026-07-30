@@ -15,6 +15,7 @@ import {
   LockIcon,
   PlusIcon,
   SearchIcon,
+  StarIcon,
   StoreIcon,
   TagIcon,
 } from '../layout/icons'
@@ -153,11 +154,13 @@ function MarketHeader() {
 
   return (
     <header className="sticky top-0 z-20 border-b border-line bg-bg/90 backdrop-blur">
-      <div className="mx-auto flex h-14 w-full max-w-[1920px] items-center gap-3 px-4 sm:px-6 md:h-16 lg:px-10">
+      {/* Deliberately airy: a tall bar and large gaps between the four zones
+          (brand · search · sell · utilities) so nothing reads as crowded. */}
+      <div className="mx-auto flex h-16 w-full max-w-[1920px] items-center gap-5 px-4 sm:gap-8 sm:px-6 md:h-20 lg:gap-12 lg:px-10">
         {/* Brand never wraps or shrinks — it's the anchor of the bar. */}
-        <Link to="/" className="flex shrink-0 items-center gap-2.5">
-          <AppLogoMark className="h-8 w-8" />
-          <span className="whitespace-nowrap font-heading text-xl font-semibold text-fg">
+        <Link to="/" className="flex shrink-0 items-center gap-3">
+          <AppLogoMark className="h-10 w-10 md:h-12 md:w-12" />
+          <span className="whitespace-nowrap font-heading text-xl font-semibold text-fg sm:text-2xl">
             Unie Max
           </span>
         </Link>
@@ -165,25 +168,20 @@ function MarketHeader() {
         {/* Global search lives in the toolbar (md+); below md it gets its
             own row underneath. Wide on purpose — search is the page's
             primary action, so it owns the header's center. */}
-        <div className="mx-auto hidden w-full max-w-3xl px-4 md:block">
+        <div className="mx-auto hidden w-full max-w-3xl md:block">
           <GlobalSearchBox />
         </div>
 
-        <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2 md:ml-0">
+        <div className="ml-auto flex shrink-0 items-center gap-3 sm:gap-4 md:ml-0 lg:gap-6">
           <CreateStoreLink className="hidden whitespace-nowrap text-sm font-semibold text-muted transition-colors hover:text-fg lg:block">
             Sell on Unie Max
           </CreateStoreLink>
-          {/* Subtle separator gives the utility cluster its own zone. */}
-          <span
-            aria-hidden="true"
-            className="mx-1.5 hidden h-5 w-px bg-line lg:block"
-          />
-          <ThemeToggle />
+          <ThemeToggle className="h-10 w-10" />
           {/* Plain <a>: /cart lives in the public router (full page load). */}
           <a
             href="/cart"
             aria-label={`Cart${cartCount > 0 ? ` (${cartCount} items)` : ''}`}
-            className="relative flex h-9 w-9 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-alt hover:text-fg"
+            className="relative flex h-10 w-10 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-alt hover:text-fg"
           >
             <CartIcon className="h-5 w-5" />
             {cartCount > 0 && (
@@ -194,12 +192,12 @@ function MarketHeader() {
           </a>
 
           {state.status === 'loading' && (
-            <div className="h-9 w-9 animate-pulse rounded-full bg-surface-alt" />
+            <div className="h-10 w-10 animate-pulse rounded-full bg-surface-alt" />
           )}
           {state.status === 'guest' && (
             <Link
               to="/login"
-              className="rounded-md bg-brand-gradient px-4 py-2 text-sm font-semibold text-brand-contrast transition hover:opacity-90"
+              className="rounded-md bg-brand-gradient px-5 py-2.5 text-sm font-semibold text-brand-contrast transition hover:opacity-90"
             >
               Sign in
             </Link>
@@ -214,7 +212,7 @@ function MarketHeader() {
 
       {/* Mobile search row — same component, own state; the md+ instance
           above is display-hidden so only one is ever interacted with. */}
-      <div className="px-4 pb-2.5 sm:px-6 md:hidden">
+      <div className="px-4 pb-3 sm:px-6 md:hidden">
         <GlobalSearchBox />
       </div>
     </header>
@@ -401,7 +399,7 @@ function GlobalSearchBox() {
 
   return (
     <div ref={rootRef} className="relative text-left">
-      <div className="flex items-center gap-2.5 rounded-pill border border-line bg-input px-4 py-2.5 transition-colors focus-within:border-accent">
+      <div className="flex items-center gap-3 rounded-pill border border-line bg-input px-5 py-3 transition-colors focus-within:border-accent">
         <SearchIcon className="h-4 w-4 shrink-0 text-muted" />
         <input
           ref={inputRef}
@@ -430,7 +428,7 @@ function GlobalSearchBox() {
       </div>
 
       {showPanel && (
-        <div className="absolute left-0 right-0 top-full z-30 mt-2 max-h-[70vh] overflow-y-auto rounded-lg border border-line bg-surface py-2 shadow-floating">
+        <div className="absolute left-0 right-0 top-full z-30 mt-3 max-h-[70vh] overflow-y-auto rounded-lg border border-line bg-surface py-2 shadow-floating">
           {!active ? (
             /* Recent searches — local only; shown while the field is empty. */
             <div className="px-4 py-2">
@@ -707,17 +705,46 @@ const CARD_GRID =
 const PRODUCT_GRID =
   'grid grid-cols-2 gap-4 sm:gap-5 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'
 
-function CardSkeletons({ count, grid = CARD_GRID }: { count: number; grid?: string }) {
+/**
+ * Loading placeholders shaped like the real card: `media="banner"` mirrors the
+ * store card (banner + centred logo), `media="square"` the product card.
+ */
+function CardSkeletons({
+  count,
+  grid = CARD_GRID,
+  media = 'banner',
+}: {
+  count: number
+  grid?: string
+  media?: 'banner' | 'square'
+}) {
   return (
     <div className={grid}>
       {Array.from({ length: count }, (_, i) => (
         <div
           key={i}
-          className="animate-pulse rounded-lg border border-line bg-surface p-6"
+          className="animate-pulse overflow-hidden rounded-lg border border-line bg-surface"
         >
-          <div className="h-14 w-14 rounded-md bg-surface-alt" />
-          <div className="mt-5 h-4 w-3/4 rounded bg-surface-alt" />
-          <div className="mt-2 h-3 w-1/2 rounded bg-surface-alt" />
+          <div
+            className={`w-full bg-surface-alt ${media === 'banner' ? 'aspect-[16/9]' : 'aspect-square'}`}
+          />
+          {media === 'banner' ? (
+            <div className="relative flex flex-col px-4 pb-4">
+              <div className="-mt-8 h-16 w-16 self-start rounded-full bg-surface-alt ring-4 ring-surface" />
+              <div className="mt-2.5 h-4 w-2/3 rounded bg-surface-alt" />
+              <div className="mb-4 mt-2 h-3 w-1/2 rounded bg-surface-alt" />
+              <div className="flex items-center justify-between border-t border-line pt-3">
+                <div className="h-3 w-16 rounded bg-surface-alt" />
+                <div className="h-7 w-24 rounded-pill bg-surface-alt" />
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2 p-4">
+              <div className="h-3 w-1/2 rounded bg-surface-alt" />
+              <div className="h-4 w-3/4 rounded bg-surface-alt" />
+              <div className="h-3 w-1/3 rounded bg-surface-alt" />
+            </div>
+          )}
         </div>
       ))}
     </div>
@@ -728,9 +755,12 @@ function CardSkeletons({ count, grid = CARD_GRID }: { count: number; grid?: stri
 function StoreLogoTile({
   logoUrl,
   className = 'h-12 w-12',
+  rounded = 'rounded-md',
 }: {
   logoUrl: string | null
   className?: string
+  /** Corner treatment — the store card's overlapping badge goes full-round. */
+  rounded?: string
 }) {
   if (logoUrl) {
     return (
@@ -738,15 +768,51 @@ function StoreLogoTile({
         src={logoUrl}
         alt=""
         loading="lazy"
-        className={`${className} rounded-md border border-line object-cover`}
+        className={`${className} ${rounded} border border-line bg-surface object-cover`}
       />
     )
   }
   return (
     <span
-      className={`${className} flex items-center justify-center rounded-md bg-brand/10 text-brand`}
+      className={`${className} ${rounded} flex items-center justify-center bg-surface-alt text-muted`}
     >
-      <StoreIcon className="h-5 w-5" />
+      <StoreIcon className="h-1/3 w-1/3" />
+    </span>
+  )
+}
+
+/**
+ * Star rating slot. **There is no review system yet**, so `rating` is `null`
+ * and the row renders as an explicit "No reviews yet" placeholder — it holds
+ * the exact space the real thing will occupy without fabricating stars for
+ * shoppers. Once the API returns a rating + count, pass them and the row lights
+ * up with no other change.
+ */
+function StoreRating({
+  rating = null,
+  reviewCount = 0,
+  className = '',
+}: {
+  rating?: number | null
+  reviewCount?: number
+  className?: string
+}) {
+  const rounded = rating === null ? 0 : Math.round(rating)
+  return (
+    <span className={`flex items-center gap-1.5 ${className}`}>
+      <span
+        className={`flex ${rating === null ? 'text-muted/35' : 'text-brand'}`}
+        aria-hidden="true"
+      >
+        {[1, 2, 3, 4, 5].map((star) => (
+          <StarIcon key={star} className="h-3.5 w-3.5" filled={star <= rounded} />
+        ))}
+      </span>
+      <span className="text-[11px] text-muted">
+        {rating === null
+          ? 'No reviews yet'
+          : `${rating.toFixed(1)} (${reviewCount.toLocaleString('en-IN')})`}
+      </span>
     </span>
   )
 }
@@ -813,58 +879,79 @@ function NewStoresSection() {
 }
 
 /**
- * Marketplace store card: merchandise first (preview strip of real product
- * covers), then identity (logo · name · product count). The whole card is
- * the link — no per-card CTA label, no raw URLs.
+ * Marketplace store card — a **storefront preview**, not a list row: a large
+ * banner cut from the store's newest product cover, the store's logo
+ * straddling the banner edge, then name · rating · product count · a "Visit
+ * Store" CTA.
+ *
+ * The whole card remains one link; "Visit Store →" is a styled `<span>`, not a
+ * nested `<a>` — that would be invalid HTML and a second tab stop for the same
+ * destination.
+ *
+ * Hover is the premium cue: 4px lift, deeper halo (`shadow-lifted`), the
+ * banner zooms, and the CTA fills with the brand gold.
  */
 function StoreCard({ store }: { store: MarketStore }) {
-  const previews = store.previewImages.slice(0, 3)
+  const banner = store.previewImages[0] ?? null
 
   return (
     <a
       href={`/store/${store.slug}`}
-      className="group overflow-hidden rounded-lg border border-line bg-surface shadow-floating transition hover:-translate-y-0.5 hover:border-accent"
+      className="group flex flex-col overflow-hidden rounded-lg border border-line bg-surface shadow-floating transition duration-200 hover:-translate-y-1 hover:border-accent hover:shadow-lifted"
     >
-      {previews.length > 0 ? (
-        <div className="grid grid-cols-3 gap-px border-b border-line bg-line">
-          {Array.from({ length: 3 }, (_, i) => {
-            const url = previews[i]
-            return url ? (
-              <img
-                key={i}
-                src={url}
-                alt=""
-                loading="lazy"
-                decoding="async"
-                className="aspect-square w-full object-cover"
-              />
-            ) : (
-              <div
-                key={i}
-                className="flex aspect-square w-full items-center justify-center bg-surface-alt text-muted"
-              >
-                <BoxIcon className="h-5 w-5 opacity-40" />
-              </div>
-            )
-          })}
-        </div>
-      ) : (
-        <div className="flex aspect-[3/1] w-full items-center justify-center border-b border-line bg-surface-alt text-muted">
-          <StoreIcon className="h-7 w-7 opacity-40" />
-        </div>
-      )}
+      <div className="relative aspect-[16/9] w-full overflow-hidden bg-surface-alt">
+        {banner ? (
+          <>
+            <img
+              src={banner}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+            />
+            {/* Only over a real photo — on the icon fallback a scrim reads as
+                a grey smear across an otherwise clean tile. */}
+            <div
+              aria-hidden="true"
+              className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/25 to-transparent"
+            />
+          </>
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-muted">
+            <StoreIcon className="h-10 w-10 opacity-40" />
+          </div>
+        )}
+      </div>
 
-      <div className="flex items-center gap-3 p-4">
-        <StoreLogoTile logoUrl={store.logoUrl} className="h-11 w-11 shrink-0" />
-        <div className="min-w-0">
-          <p className="truncate font-heading text-lg font-medium leading-tight text-fg transition-colors group-hover:text-brand">
-            {store.name}
-          </p>
-          <p className="mt-0.5 truncate text-xs text-muted">
+      {/* `relative` is load-bearing: the banner above is positioned, so without
+          it this block (and the overlapping logo) paints UNDERNEATH the image. */}
+      <div className="relative flex flex-1 flex-col px-4 pb-4">
+        <StoreLogoTile
+          logoUrl={store.logoUrl}
+          rounded="rounded-full"
+          className="-mt-8 h-16 w-16 shrink-0 self-start ring-4 ring-surface"
+        />
+
+        {/* Left-aligned and full-bleed to the card's padding — a centred column
+            left both margins empty. Stays `text-fg` on hover: the brand gold is
+            a light color and would drop to ~1.9:1 against the white surface. */}
+        <p className="mt-2.5 line-clamp-1 font-heading text-lg font-medium leading-tight text-fg">
+          {store.name}
+        </p>
+
+        <StoreRating className="mb-4 mt-1.5" />
+
+        {/* Footer spans the full width: count anchored left, CTA right. */}
+        <div className="mt-auto flex items-center justify-between gap-3 border-t border-line pt-3">
+          <span className="truncate text-xs font-semibold text-muted">
             {store.productCount > 0
-              ? `${store.productCount.toLocaleString('en-IN')} product${store.productCount === 1 ? '' : 's'}`
+              ? `${store.productCount.toLocaleString('en-IN')} Product${store.productCount === 1 ? '' : 's'}`
               : 'Just opened'}
-          </p>
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-pill border border-line px-3.5 py-1.5 text-xs font-bold text-fg transition-colors group-hover:border-brand group-hover:bg-brand group-hover:text-brand-contrast">
+            Visit Store
+            <ChevronRightIcon className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+          </span>
         </div>
       </div>
     </a>
@@ -945,7 +1032,7 @@ function FreshFindsSection({
       {failed ? (
         <SectionError onRetry={retry} />
       ) : products === null ? (
-        <CardSkeletons count={8} grid={PRODUCT_GRID} />
+        <CardSkeletons count={8} grid={PRODUCT_GRID} media="square" />
       ) : (
         <div className={PRODUCT_GRID}>
           {products.map((product) => (
@@ -957,26 +1044,34 @@ function FreshFindsSection({
   )
 }
 
-/** Marketplace product card — image, store, name, price. One link, no CTA. */
+/**
+ * Marketplace product card — image, store, name, price. One link, no CTA.
+ * Shares the store card's hover language (4px lift, deeper halo, image zoom)
+ * so the two grids on this page feel like one system.
+ */
 function ProductCard({ product }: { product: MarketProduct }) {
   return (
     <a
       href={`/store/${product.store.slug}/product/${product.slug}`}
-      className="group overflow-hidden rounded-lg border border-line bg-surface shadow-floating transition hover:-translate-y-0.5 hover:border-accent"
+      className="group overflow-hidden rounded-lg border border-line bg-surface shadow-floating transition duration-200 hover:-translate-y-1 hover:border-accent hover:shadow-lifted"
     >
-      {product.image?.url ? (
-        <img
-          src={product.image.url}
-          alt={product.image.altText ?? product.name}
-          loading="lazy"
-          decoding="async"
-          className="aspect-square w-full border-b border-line object-cover"
-        />
-      ) : (
-        <div className="flex aspect-square w-full items-center justify-center border-b border-line bg-surface-alt text-muted">
-          <BoxIcon className="h-8 w-8 opacity-40" />
-        </div>
-      )}
+      {/* Own overflow context, so the zoom is clipped by the image frame and
+          the divider below it doesn't scale along. */}
+      <div className="aspect-square w-full overflow-hidden border-b border-line bg-surface-alt">
+        {product.image?.url ? (
+          <img
+            src={product.image.url}
+            alt={product.image.altText ?? product.name}
+            loading="lazy"
+            decoding="async"
+            className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-muted">
+            <BoxIcon className="h-8 w-8 opacity-40" />
+          </div>
+        )}
+      </div>
       <div className="p-4">
         <p className="truncate text-xs text-muted">{product.store.name}</p>
         <p className="mt-1 truncate font-heading text-lg font-medium leading-tight text-fg transition-colors group-hover:text-brand">
@@ -1013,10 +1108,10 @@ function RecentlyViewedSection() {
           <a
             key={store.slug}
             href={`/store/${store.slug}`}
-            className="group flex items-center gap-3.5 rounded-lg border border-line bg-surface p-4 shadow-floating transition hover:-translate-y-0.5 hover:border-accent"
+            className="group flex items-center gap-3.5 rounded-lg border border-line bg-surface p-4 shadow-floating transition duration-200 hover:-translate-y-1 hover:border-accent hover:shadow-lifted"
           >
             <StoreLogoTile logoUrl={store.logoUrl} className="h-11 w-11 shrink-0" />
-            <span className="min-w-0 truncate font-heading text-lg font-medium leading-tight text-fg transition-colors group-hover:text-brand">
+            <span className="min-w-0 truncate font-heading text-lg font-medium leading-tight text-fg">
               {store.name}
             </span>
           </a>
@@ -1144,13 +1239,15 @@ function BecomeSellerSection({ ownsStores }: { ownsStores: boolean }) {
               </li>
             ))}
           </ul>
-          <CreateStoreLink className="mt-8 inline-block rounded-md bg-white px-8 py-3 text-sm font-bold text-black transition hover:bg-white/90">
+          {/* Dark button with a gold label: the panel is now the brand
+              gradient, so a white button would barely separate from it. */}
+          <CreateStoreLink className="mt-8 inline-block rounded-md bg-brand-contrast px-8 py-3 text-sm font-bold text-brand transition hover:opacity-90">
             {ownsStores ? 'Create Another Store' : 'Create Store'}
           </CreateStoreLink>
         </div>
 
             {counters.length > 0 && (
-              <div className="flex gap-10 border-t border-white/25 pt-8 sm:gap-14 lg:flex-col lg:gap-8 lg:border-l lg:border-t-0 lg:pl-16 lg:pt-0">
+              <div className="flex gap-10 border-t border-brand-contrast/25 pt-8 sm:gap-14 lg:flex-col lg:gap-8 lg:border-l lg:border-t-0 lg:pl-16 lg:pt-0">
                 {counters.map(({ value, label }) => (
                   <div key={label}>
                     <p className="font-heading text-3xl font-bold sm:text-4xl">

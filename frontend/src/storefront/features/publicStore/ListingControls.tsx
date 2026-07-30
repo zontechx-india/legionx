@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { storeHomeUrl, type PublicSort } from '../stores/storesApi'
+import { PRODUCT_GRID } from './ProductCard'
 import {
   BoxIcon,
   ChevronDownIcon,
@@ -105,11 +106,11 @@ export function SectionHeading({
   return (
     <div className="flex items-end justify-between gap-4">
       <div>
-        <span className="block h-1 w-10 rounded-full bg-brand" />
+        <span className="block h-0.5 w-8 rounded-full bg-brand" />
         {/* Oswald display scale from the prototype: 2xl → 3xl, medium weight
             (700 is reserved for the hero). */}
         <h2
-          className={`mt-2.5 font-heading text-2xl font-semibold sm:text-3xl ${skin.text}`}
+          className={`mt-2 font-heading text-2xl font-semibold sm:text-3xl ${skin.text}`}
         >
           {title}
         </h2>
@@ -221,20 +222,22 @@ export function LoadMore({
   )
 }
 
-/** Placeholder cards while the first page loads. */
+/** Placeholder cards while the first page loads — same shape as ProductCard. */
 export function GridSkeleton({ skin }: { skin: Skin }) {
   return (
-    <ul className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
-      {Array.from({ length: 8 }).map((_, i) => (
+    <ul className={PRODUCT_GRID}>
+      {Array.from({ length: 12 }).map((_, i) => (
         <li
           key={i}
-          className={`overflow-hidden rounded-xl border ${skin.border} ${skin.surface}`}
+          className={`overflow-hidden rounded-lg border ${skin.border} ${skin.surface}`}
         >
-          <div className={`aspect-square animate-pulse ${skin.well}`} />
-          <div className="space-y-2 p-4">
-            <div className="h-2.5 w-1/3 animate-pulse rounded-full bg-surface-alt" />
-            <div className="h-4 w-3/4 animate-pulse rounded-full bg-surface-alt" />
-            <div className="h-4 w-1/2 animate-pulse rounded-full bg-surface-alt" />
+          <div className="p-2 pb-0">
+            <div className={`aspect-square animate-pulse rounded-md ${skin.well}`} />
+          </div>
+          <div className="space-y-2 p-3">
+            <div className="h-2 w-1/3 animate-pulse rounded-full bg-surface-alt" />
+            <div className="h-3.5 w-3/4 animate-pulse rounded-full bg-surface-alt" />
+            <div className="h-3.5 w-1/2 animate-pulse rounded-full bg-surface-alt" />
           </div>
         </li>
       ))}

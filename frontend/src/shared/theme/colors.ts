@@ -1,60 +1,73 @@
 /**
- * Color tokens — anydesk design system (skillui).
+ * Color tokens — anydesk design system (skillui) with the approved Unie Max
+ * brand palette.
  *
- * Source of truth: `skillui/tokens/colors.json`, `skillui/DESIGN.md`,
- * `skillui/SKILL.md` (component patterns) and `skillui/references/INTERACTIONS.md`.
- * Every value below traces back to the design system — never invent new colors.
+ * ⚠️ **This file is a documentation mirror, not the runtime source.** Nothing
+ * renders from it — every color on screen comes from the CSS variables in
+ * `src/index.css`. Change a value here and the app does not move; change both,
+ * or change `index.css` alone. It exists so JS-side consumers (canvas, chart
+ * libraries, inline SVG) have typed constants to reach for.
  *
- * Accent decision: the live brand color is the red/orange `--primary` (#ef443b);
- * it drives CTAs / links. Blue #1863dc (the token-file "accent") is used for
- * focus rings and active states.
+ * Structure, spacing, radius, shadows and typography still come from the skill
+ * unchanged (`skillui/DESIGN.md`, `skillui/SKILL.md`). **Color is the one
+ * deliberate deviation**: the brand is the gold `#f5b400` (not the skill's red),
+ * on a light-first neutral ramp. Blue `#1863dc` — the skill's own accent — is
+ * still reserved for focus rings and active states.
  */
 
-/** Raw palette — the exact hex values extracted from the design system. */
+/** Raw palette — the approved brand hexes plus the skill's status colors. */
 export const palette = {
-  black: '#000000', // background — darkest surface
-  white: '#ffffff', // text-primary
-  surface: '#2e2e2e', // cards, panels, modals
-  border: '#1a1a1a', // dividers, card borders, outlines
-  deep: '#101010', // extended — deep background layer / shadow color
-  mist: '#d0d5d2', // extended — neutral light
-  muted: '#8c8c8c', // component text-muted (badges, table headers, nav links)
+  white: '#ffffff', // surface — cards, panels, modals
+  canvas: '#f8f8f8', // page background (light)
+  well: '#f1f1f1', // extended — recessed wells / hover tracks (light)
+  border: '#e8e8e8', // dividers, card borders, outlines (light)
+  ink: '#1a1a1a', // primary text (light)
+  muted: '#707070', // secondary text (light)
+
+  dark: '#121212', // page background (dark) + text ON the brand gold
+  darkSurface: '#1e1e1e', // extended — cards/panels (dark)
+  darkWell: '#0c0c0c', // extended — recessed wells (dark)
+  darkInput: '#1a1a1a', // extended — input fields (dark)
+  darkBorder: '#2a2a2a', // extended — dividers/borders (dark)
+  darkInk: '#f8f8f8', // primary text (dark)
+  darkMuted: '#9a9a9a', // secondary text (dark) — #707070 fails AA on #121212
 
   blue: '#1863dc', // accent — focus rings, active states
   info: '#0000ee', // informational highlights
 
-  red: '#ef443b', // brand primary (--primary) / danger
-  redHover: '#cd1a11', // link/CTA hover (rgb 205, 26, 17)
-  redSoft: '#ff8e91', // --secondary
-  orange: '#ff8a3d', // brand gradient end (warm orange, pairs with red)
+  gold: '#f5b400', // brand primary
+  goldHover: '#e0a000', // link/CTA hover
+  goldLight: '#ffd24d', // brand gradient end (lighter gold)
 
+  red: '#ef443b', // danger (no longer the brand color)
   green: '#008000', // success
   amber: '#856404', // warning
 } as const
 
-/** Semantic roles — reference these from components, not the raw palette. */
+/** Semantic roles (default = light scheme) — reference these, not the raw palette. */
 export const colors = {
   /** Page / app background. */
-  background: palette.black,
+  background: palette.canvas,
   /** Card and panel surfaces. */
-  surface: palette.surface,
-  /** Deepest layer (behind surfaces / shadow tone). */
-  surfaceDeep: palette.deep,
+  surface: palette.white,
+  /** Recessed layer (wells, hover tracks). */
+  surfaceDeep: palette.well,
   /** Dividers, card borders, outlines. */
   border: palette.border,
 
   text: {
-    primary: palette.white,
+    primary: palette.ink,
     muted: palette.muted,
-    /** For text placed on a light/accent surface. */
-    inverse: palette.black,
+    /** For text placed on a dark surface. */
+    inverse: palette.darkInk,
   },
 
   /** Brand accent — CTAs, primary buttons, links. */
   brand: {
-    primary: palette.red,
-    primaryHover: palette.redHover,
-    secondary: palette.redSoft,
+    primary: palette.gold,
+    primaryHover: palette.goldHover,
+    /** Text ON the brand color — the gold is light, so ink, never white. */
+    contrast: palette.dark,
   },
 
   /** Blue accent — focus rings, active nav, secondary emphasis. */
@@ -71,8 +84,8 @@ export const colors = {
   overlay: {
     /** Modal / dialog backdrop. */
     backdrop: 'rgba(0, 0, 0, 0.6)',
-    /** Red glow effect (`.any-glow-red`). */
-    glowRed: 'rgba(239, 68, 59, 0.5)',
+    /** Brand glow (metal CTA elevation). */
+    glowBrand: 'rgba(245, 180, 0, 0.65)',
   },
 } as const
 
@@ -80,42 +93,43 @@ export const colors = {
  * Theme-flippable color schemes. Colors are the ONLY themeable axis —
  * spacing, typography, radius and shadows come from the skill and never change.
  *
- * `dark` is the default (the anydesk system is dark-native). `light` is derived
- * from the same design system, reusing the extended palette (#d0d5d2 borders,
- * #101010 text) so every value still traces back to skillui.
+ * `light` is the default (the brand palette is light-first). `dark` is derived
+ * from the palette's single dark value #121212; its secondary text is lifted to
+ * #9a9a9a because the light scheme's #707070 fails AA on that canvas.
  *
- * Brand red and accent blue are identical across both themes.
+ * Brand gold and accent blue are identical across both themes.
  */
 export const schemes = {
-  dark: {
-    bg: palette.black, //  #000000 page canvas
-    surface: palette.surface, //  #2e2e2e cards / panels / modals
-    surfaceAlt: palette.deep, //  #101010 deeper panels (sidebar, wells)
-    inputBg: palette.black, //  inputs sit on the page color
-    line: palette.border, //  #1a1a1a dividers / borders
-    fg: palette.white, //  #ffffff primary text
-    fgMuted: palette.muted, //  #8c8c8c secondary text
-  },
   light: {
-    bg: '#f5f5f5', //  light gray canvas
-    surface: palette.white, //  #ffffff cards
-    surfaceAlt: palette.white,
-    inputBg: palette.white,
-    line: palette.mist, //  #d0d5d2 (extended) borders
-    fg: palette.deep, //  #101010 (extended) primary text
-    fgMuted: palette.muted, //  #8c8c8c secondary text
+    bg: palette.canvas, //  #f8f8f8 page canvas
+    surface: palette.white, //  #ffffff cards / panels / modals
+    surfaceAlt: palette.well, //  #f1f1f1 wells / hover tracks
+    inputBg: palette.white, //  inputs sit on the card color
+    line: palette.border, //  #e8e8e8 dividers / borders
+    fg: palette.ink, //  #1a1a1a primary text
+    fgMuted: palette.muted, //  #707070 secondary text
+  },
+  dark: {
+    bg: palette.dark, //  #121212 page canvas
+    surface: palette.darkSurface, //  #1e1e1e cards / panels / modals
+    surfaceAlt: palette.darkWell, //  #0c0c0c wells / hover tracks
+    inputBg: palette.darkInput, //  #1a1a1a input fields
+    line: palette.darkBorder, //  #2a2a2a dividers / borders
+    fg: palette.darkInk, //  #f8f8f8 primary text
+    fgMuted: palette.darkMuted, //  #9a9a9a secondary text
   },
 } as const
 
 /** Colors shared by both themes (brand, accent, status, overlays). */
 export const invariants = {
-  brand: palette.red,
-  brandHover: palette.redHover,
-  brandContrast: palette.white,
-  /** The signature red→orange brand gradient (AnyDesk primary-orange-gradient).
-   *  Used for hero surfaces, brand marks and primary CTAs (app chrome only —
-   *  per-store pages keep the owner's solid color). */
-  brandGradient: `linear-gradient(135deg, ${palette.red} 0%, ${palette.orange} 100%)`,
+  brand: palette.gold,
+  brandHover: palette.goldHover,
+  /** Text ON the brand — dark ink, because the gold is a light color. */
+  brandContrast: palette.dark,
+  /** The signature gold brand gradient. Used for hero surfaces, brand marks
+   *  and primary CTAs (app chrome only — per-store pages keep the owner's
+   *  own colors). */
+  brandGradient: `linear-gradient(135deg, ${palette.gold} 0%, ${palette.goldLight} 100%)`,
   accent: palette.blue,
   success: palette.green,
   warning: palette.amber,

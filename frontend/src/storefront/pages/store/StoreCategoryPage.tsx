@@ -5,7 +5,10 @@ import {
   storeCategoryUrl,
   type PublicCategoryDetail,
 } from '../../features/stores/storesApi'
-import { usePublicStore } from '../../features/publicStore/PublicStoreLayout'
+import {
+  StorePageShell,
+  usePublicStore,
+} from '../../features/publicStore/PublicStoreLayout'
 import { usePageTitle } from '../../../shared/usePageTitle'
 import { ProductListing } from '../../features/publicStore/ProductListing'
 import type { Crumb } from '../../features/publicStore/ListingControls'
@@ -43,25 +46,31 @@ export function StoreCategoryPage() {
   }, [store.slug, categorySlug])
 
   if (category === undefined) {
-    return <p className={`py-16 text-center text-sm ${skin.muted}`}>Loading…</p>
+    return (
+      <StorePageShell>
+        <p className={`py-16 text-center text-sm ${skin.muted}`}>Loading…</p>
+      </StorePageShell>
+    )
   }
 
   if (category === null) {
     return (
-      <div className="py-16 text-center">
-        <h1 className={`font-heading text-lg font-bold ${skin.text}`}>
-          Category not found
-        </h1>
-        <p className={`mt-2 text-sm ${skin.muted}`}>
-          It may have been renamed or removed.
-        </p>
-        <Link
-          to={`/store/${store.slug}`}
-          className={`mt-5 inline-flex h-10 items-center rounded-md px-5 text-sm font-bold ${skin.cta}`}
-        >
-          Back to store
-        </Link>
-      </div>
+      <StorePageShell>
+        <div className="py-16 text-center">
+          <h1 className={`font-heading text-lg font-bold ${skin.text}`}>
+            Category not found
+          </h1>
+          <p className={`mt-2 text-sm ${skin.muted}`}>
+            It may have been renamed or removed.
+          </p>
+          <Link
+            to={`/store/${store.slug}`}
+            className={`mt-5 inline-flex h-10 items-center rounded-md px-5 text-sm font-bold ${skin.cta}`}
+          >
+            Back to store
+          </Link>
+        </div>
+      </StorePageShell>
     )
   }
 

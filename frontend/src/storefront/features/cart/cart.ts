@@ -127,8 +127,12 @@ export const cart = {
     return items
   },
 
-  /** Add one unit (or create the line) — capped at the snapshotted stock. */
-  add(item: Omit<CartItem, 'qty'>) {
+  /**
+   * Add `qty` units (or create the line) — capped at the snapshotted stock.
+   * The product page's quantity selector adds several at once; every other
+   * caller adds one.
+   */
+  add(item: Omit<CartItem, 'qty'>, qty = 1) {
     const key = keyOf(item.storeSlug, item.productId, item.variantId)
     const existing = items.find((i) => itemKey(i) === key)
     if (existing) {
@@ -136,11 +140,12 @@ export const cart = {
         item.storeSlug,
         item.productId,
         item.variantId,
-        existing.qty + 1,
+        existing.qty + qty,
       )
       return
     }
-    commit([...items, { ...item, qty: 1 }])
+    const clamped = Math.max(1, Math.min(qty, item.stockQuantity))
+    commit([...items, { ...item, qty: clamped }])
   },
 
   /** Set a line's quantity; 0 removes it. Clamped to [0, stock]. */

@@ -437,12 +437,53 @@ column), which lets the homepage render full-bleed section bands instead.
   e.g. "Best Sellers"). One page, since they are the same listing at a
   different scope. Target of the header search, the Shop nav item and every
   "View all" link (which passes its section).
-- **`StoreProductPage`** — the **only** page that renders variants: a real
-  **media gallery** (main viewer + thumbnail strip when there is more than
-  one item; the product video plays inline with a play-glyph thumb; thumbs
-  lazy-load), a **share button** beside the title (native sheet / copy the
-  product's permanent URL), price/stock following the selected option,
-  Add to Cart, Related Products.
+- **`StoreProductPage`** — the **only** page that renders variants, laid out
+  as breadcrumb · gallery + purchase card · Product Highlights · Description ·
+  Specifications · You May Also Like:
+  - **Media gallery** — main viewer plus a thumbnail rail (vertical beside the
+    image on `lg`, a scrollable strip below on phones) whenever there is more
+    than one item; the product video plays inline with a play-glyph thumb and
+    thumbs lazy-load. Interactions: pointer-anchored **hover zoom** (mouse
+    only — `pointerType` guarded, images only), **swipe** between items on
+    touch, hover arrows and an `n / total` counter. The gallery is
+    `lg:sticky` so it stays in view while the long right column scrolls.
+  - **Purchase card** — everything about buying inside one bordered card:
+    category eyebrow → name → price → stock badge → the first few highlights →
+    variant picker (each option shows its own price / "Out of stock") →
+    **quantity selector + Add to Cart + Buy Now** (`PurchaseActions`; Buy Now
+    adds the line then goes straight to `/checkout/{storeSlug}`) → the
+    delivery block → trust badges. The **share button** sits in the card
+    header beside the name.
+  - **Delivery, returns & trust are read from the seller's own settings** —
+    fulfilment mode (delivery / pickup, pickup naming the primary footer
+    location), COD and online-payment switches, and the returns/shipping
+    policy links — never a fabricated courier ETA. "Free delivery" is true
+    platform-wide today (`orders.service.ts` charges a flat 0); **update that
+    line when shipping rules land**.
+  - **Highlights / Description / Specifications come out of the single
+    description field** (`productDescription.ts` — see below). The first 4
+    highlights sit in the purchase card; the standalone **Product Highlights**
+    section renders only when there are more than that (the same bullets twice
+    on one screen read as padding). The Specifications table always renders:
+    parsed rows first, then the catalog facts (category path, option count,
+    availability, sold-by).
+  - **Sticky purchase bar** — an IntersectionObserver watches the purchase
+    card; once it scrolls out of view a fixed bottom bar (thumbnail, name,
+    live price, Add + Buy Now) takes over on every breakpoint, and the page
+    carries `pb-24` so it never covers content.
+  - **No rating and no reviews.** There is no review system in the schema or
+    API, and the platform's rule is to say so rather than invent stars (same
+    as `StoreRating` on the marketplace homepage) — the section arrives with
+    the feature.
+- **`productDescription.ts`** — `parseDescription()` turns the product's ONE
+  free-text description into `{ highlights, specs, paragraphs }`: `-`/`*`/`•`/
+  `✔` lines become highlights, short `Label: value` lines become spec rows
+  (label ≤ 28 chars, value ≤ 60, **and at least 2 of them** — otherwise they
+  fall back to prose in their original position), everything else stays prose
+  with paragraph breaks preserved. Nothing is fabricated: a plain paragraph
+  description renders exactly as one Description section, as before. The
+  catalog deliberately has no highlights/specification fields; this reads the
+  structure the seller already typed instead of adding schema.
 - **`ProductListing`** — shared listing body (breadcrumb, title, sort & filter
   bar, grid, Load More) used by the category and search pages. It owns the
   *controls* only; every query goes to the server.
@@ -499,8 +540,9 @@ effective price, stock, store name/slug, and the **cover-image URL** — cart
 and checkout rows show a product thumbnail (box-icon placeholder when the
 product has no photo; revalidation refreshes the URL, so pre-thumbnail
 lines and changed covers heal themselves). Cart rows show the variant as
-a chip. Adding to cart pops a short **"Added to cart — View cart" toast**
-(`AddedToast` in `CartControls.tsx`); stepper increments stay silent.
+a chip. Adding to cart from the product page pops a short **"Added to cart —
+View cart" toast** (`AddedToast` in `CartControls.tsx`); quantity changes on
+the cart pages stay silent.
 Three public routes, matched before the session gate like `/store/{slug}`:
 **`/cart`** (`pages/cart/CartPage.tsx`) groups items **by store** — each
 store card shows the store's **logo** (fetched via
@@ -841,7 +883,9 @@ frontend/
     │   │   │   ├── useProductQuery.ts# Server-paginated listing (debounce + race guard)
     │   │   │   ├── catalog.ts        # Filter state + stock-level presentation only
     │   │   │   ├── storeTheme.ts     # Per-store CSS-var theming + metal tokens (storeVars) + SKIN
-    │   │   │   ├── CartControls.tsx  # AddToCartControl (button ↔ stepper) + StockBadge
+    │   │   │   ├── CartControls.tsx  # PurchaseActions (qty + Add to Cart + Buy Now),
+    │   │   │   │                     #   QuantityStepper, AddedToast, StockBadge
+    │   │   │   ├── productDescription.ts # Description → highlights / specs / prose
     │   │   │   └── FilterPanel.tsx   # Availability + Price filters (slide-over/bottom sheet)
     │   │   └── stores/           # Customer-owned stores (see Stores feature above)
     │   │       ├── storesApi.ts  # Typed HTTP client for /api/v1/stores
@@ -858,7 +902,8 @@ frontend/
     │       ├── store/            # Public storefront pages (no sign-in)
     │       │   ├── StoreHomePage.tsx     # Hero, featured categories, merchandising rows
     │       │   ├── StoreCategoryPage.tsx # Breadcrumb, subcategory chips, listing
-    │       │   ├── StoreProductPage.tsx  # Variant picker + related products
+    │       │   ├── StoreProductPage.tsx  # Gallery (zoom/swipe) + purchase card +
+    │       │   │                         #   highlights/description/specs + sticky bar
     │       │   └── StoreShopPage.tsx     # Browse all / ?q= search results
     │       ├── cart/
     │       │   ├── CartPage.tsx       # /cart — items grouped by store + totals

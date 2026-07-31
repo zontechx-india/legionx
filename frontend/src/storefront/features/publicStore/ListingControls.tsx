@@ -149,12 +149,14 @@ export function Breadcrumb({
     ...trail,
   ]
   return (
-    <nav aria-label="Breadcrumb" className="mb-3">
-      <ol className="flex flex-wrap items-center gap-1 text-xs">
+    // Readability: the trail used to be 10px-ish and cramped — it is the only
+    // "where am I" cue on a deep catalog, so it gets body-size type and air.
+    <nav aria-label="Breadcrumb" className="mb-4">
+      <ol className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
         {all.map((crumb, i) => (
-          <li key={`${crumb.label}-${i}`} className="flex items-center gap-1">
+          <li key={`${crumb.label}-${i}`} className="flex items-center gap-2">
             {i > 0 && (
-              <ChevronRightIcon className={`h-3.5 w-3.5 ${skin.muted}`} />
+              <ChevronRightIcon className={`h-4 w-4 ${skin.muted}`} />
             )}
             {crumb.to ? (
               <Link

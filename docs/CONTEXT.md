@@ -245,10 +245,23 @@ A single account can own multiple stores and switch between them.
   category also shows its subcategories' products; a subcategory shows only
   its own.
 
-  **Product page** (`/store/{slug}/product/{product}`) — images, name,
-  description, price, stock, **variant picker** (Colour / Storage / Size / RAM
-  as labelled options), Add to Cart, and Related Products. This is the *only*
-  place variants are rendered.
+  **Product page** (`/store/{slug}/product/{product}`) — a full detail page,
+  and the *only* place variants are rendered. A **gallery** (zoom on hover,
+  swipe on touch, thumbnail rail, inline video) beside a **purchase card**:
+  name, price, stock, the **variant picker** (Colour / Storage / Size / RAM as
+  labelled options, each showing its own price), a **quantity selector**, **Add
+  to Cart** and **Buy Now** (straight to this store's checkout), and share.
+  Below the card: **Product Highlights**, **Description**, **Specifications**
+  and **You May Also Like**. A **sticky purchase bar** follows the customer
+  once the card scrolls away.
+
+  What the page shows is what the seller actually entered — there are no
+  invented selling points: highlights and specifications are read out of the
+  product's own description (bullet lines become highlights, short
+  "Label: value" lines become specification rows), and the delivery / returns /
+  trust block is built from the store's shipping mode, pickup location, payment
+  switches and policy links. **No rating or reviews are shown** — the review
+  system doesn't exist yet, and the platform never fabricates stars.
 
   **Shop / Search** (`/store/{slug}/shop`, `?q=` for search) — browse the whole
   catalog in the same grid, or search it by name and description. This is the

@@ -429,6 +429,26 @@ export function LockIcon({ className }: { className?: string }) {
   )
 }
 
+/** U-turn arrow — the return/refund cue on the product page. */
+export function ReturnIcon({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <path d="M4 8.5h11a4.5 4.5 0 0 1 0 9H8" />
+      <path d="m7.5 5 -3.5 3.5 3.5 3.5" />
+    </Svg>
+  )
+}
+
+/** Shield with a tick — the "genuine product" trust cue. */
+export function ShieldCheckIcon({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <path d="M12 3.5 5 6v6c0 4.2 2.9 7.4 7 8.5 4.1-1.1 7-4.3 7-8.5V6l-7-2.5Z" />
+      <path d="m9 12 2 2 4-4" />
+    </Svg>
+  )
+}
+
 /** Bar chart — the seller dashboard section. */
 export function ChartIcon({ className }: { className?: string }) {
   return (

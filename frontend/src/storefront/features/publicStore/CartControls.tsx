@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { cart, useCartQty } from '../cart/cart'
 import { cartUrl } from '../stores/storesApi'
 import { CartIcon, CheckIcon, MinusIcon, PlusIcon } from '../../layout/icons'
@@ -9,32 +9,8 @@ import type { Skin } from './storeTheme'
 /** How long the "Added to cart" toast stays up. */
 const TOAST_MS = 4000
 
-/**
- * Add-to-cart control shared by product cards (simple products) and the
- * options sheet (a chosen variant). Swaps between an "Add" button and a
- * stock-capped quantity stepper based on the live cart. Identity is
- * store + product + variant (null for a plain product), matching the cart's
- * own line key.
- *
- * The first add pops a short **"Added to cart — View cart"** toast, closing
- * the feedback loop (the stepper swap alone was too quiet); stepper
- * increments stay silent.
- */
-export function AddToCartControl({
-  storeSlug,
-  storeName,
-  productId,
-  productSlug,
-  variantId,
-  name,
-  variantName,
-  imageUrl = null,
-  price,
-  stock,
-  skin,
-  compact = false,
-  block = false,
-}: {
+/** What identifies (and snapshots) the line a purchase control writes. */
+export interface PurchaseTarget {
   storeSlug: string
   storeName: string
   productId: string
@@ -44,101 +20,194 @@ export function AddToCartControl({
   name: string
   variantName: string | null
   /** Cover-image URL — snapshotted so cart lines can show a thumbnail. */
-  imageUrl?: string | null
+  imageUrl: string | null
   /** Decimal string as served by the API (variant price when applicable). */
   price: string
   stock: number
+}
+
+/**
+ * Purchase block for the product page: a stock-capped **quantity selector**
+ * next to **Add to Cart**, with **Buy Now** beneath it (add, then straight to
+ * this store's checkout — orders are placed per store).
+ *
+ * The quantity is local until the customer commits it, which is what makes a
+ * "3 × Add to Cart" possible; the live cart line is only *reported* ("N in
+ * cart"), never mirrored into the selector — a stepper that silently rewrote
+ * the cart on every tap made the button meaningless.
+ *
+ * Adding pops the short **"Added to cart — View cart"** toast, closing the
+ * feedback loop.
+ */
+export function PurchaseActions({
+  target,
+  skin,
+  /** Compact single row for the sticky bar (no quantity selector). */
+  compact = false,
+}: {
+  target: PurchaseTarget
   skin: Skin
-  /** Shorter label ("Add") for tight rows. */
   compact?: boolean
-  /** Fill the container width (grid cards, sheet). */
-  block?: boolean
 }) {
-  const qty = useCartQty(storeSlug, productId, variantId)
+  const navigate = useNavigate()
+  const inCart = useCartQty(target.storeSlug, target.productId, target.variantId)
+  const [qty, setQty] = useState(1)
   const [added, setAdded] = useState(false)
   const toastTimer = useRef<number | undefined>(undefined)
   useEffect(() => () => window.clearTimeout(toastTimer.current), [])
 
-  const showToast = () => {
+  // A different option (or product) starts over at one.
+  useEffect(() => setQty(1), [target.productId, target.variantId])
+
+  const max = Math.max(1, target.stock)
+
+  const addToCart = () => {
+    cart.add(
+      {
+        productId: target.productId,
+        productSlug: target.productSlug,
+        variantId: target.variantId,
+        storeSlug: target.storeSlug,
+        storeName: target.storeName,
+        name: target.name,
+        variantName: target.variantName,
+        imageUrl: target.imageUrl,
+        price: target.price,
+        stockQuantity: target.stock,
+      },
+      qty,
+    )
     setAdded(true)
     window.clearTimeout(toastTimer.current)
     toastTimer.current = window.setTimeout(() => setAdded(false), TOAST_MS)
   }
 
-  if (stock <= 0) {
+  if (target.stock <= 0) {
     return (
-      <span
-        className={`inline-flex h-9 items-center justify-center rounded-md bg-surface-alt px-3 text-xs font-semibold text-muted ${
-          block ? 'w-full' : ''
-        }`}
+      <div
+        className={`flex h-11 w-full items-center justify-center rounded-md bg-surface-alt px-3 text-sm font-semibold text-muted`}
       >
         Out of stock
-      </span>
+      </div>
     )
   }
 
-  if (qty === 0) {
+  const buyNow = () => {
+    addToCart()
+    navigate(`/checkout/${target.storeSlug}`)
+  }
+
+  if (compact) {
     return (
       <>
         <button
           type="button"
-          onClick={() => {
-            cart.add({
-              productId,
-              productSlug,
-              variantId,
-              storeSlug,
-              storeName,
-              name,
-              variantName,
-              imageUrl,
-              price,
-              stockQuantity: stock,
-            })
-            showToast()
-          }}
-          className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-md px-3.5 text-xs font-bold transition ${skin.cta} ${
-            block ? 'w-full' : ''
-          }`}
+          onClick={addToCart}
+          className={`inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-md border px-3 text-sm font-bold transition hover:border-brand ${skin.border} ${skin.chip} ${skin.text}`}
         >
           <CartIcon className="h-4 w-4" />
-          {compact ? 'Add' : 'Add to Cart'}
+          Add
         </button>
-        {added && <AddedToast name={name} storeSlug={storeSlug} />}
+        <button
+          type="button"
+          onClick={buyNow}
+          className={`inline-flex h-11 flex-1 items-center justify-center rounded-md px-3 text-sm font-bold transition ${skin.cta}`}
+        >
+          Buy Now
+        </button>
+        {added && <AddedToast name={target.name} storeSlug={target.storeSlug} />}
       </>
     )
   }
 
   return (
-    <>
-    {added && <AddedToast name={name} storeSlug={storeSlug} />}
+    <div className="space-y-3">
+      <div className="flex items-center gap-3">
+        <QuantityStepper
+          qty={qty}
+          max={max}
+          onChange={setQty}
+          skin={skin}
+        />
+        <button
+          type="button"
+          onClick={addToCart}
+          className={`inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-md border px-4 text-sm font-bold transition hover:border-brand ${skin.border} ${skin.chip} ${skin.text}`}
+        >
+          <CartIcon className="h-4 w-4" />
+          Add to Cart
+        </button>
+      </div>
+
+      <button
+        type="button"
+        onClick={buyNow}
+        className={`inline-flex h-11 w-full items-center justify-center rounded-md px-4 text-sm font-bold transition ${skin.cta}`}
+      >
+        Buy Now
+      </button>
+
+      {inCart > 0 && (
+        <p className={`text-xs ${skin.muted}`}>
+          {inCart} already in your{' '}
+          <Link to={cartUrl(target.storeSlug)} className="font-semibold text-brand hover:underline">
+            cart
+          </Link>
+        </p>
+      )}
+
+      {added && <AddedToast name={target.name} storeSlug={target.storeSlug} />}
+    </div>
+  )
+}
+
+/** −/N/+ selector, clamped to [1, max]. Also typeable for large quantities. */
+export function QuantityStepper({
+  qty,
+  max,
+  onChange,
+  skin,
+}: {
+  qty: number
+  max: number
+  onChange: (qty: number) => void
+  skin: Skin
+}) {
+  const clamp = (n: number) => Math.max(1, Math.min(n, max))
+  return (
     <span
-      className={`inline-flex h-9 items-center justify-between overflow-hidden rounded-md border ${skin.border} ${skin.chip} ${
-        block ? 'w-full' : ''
-      }`}
+      className={`inline-flex h-11 shrink-0 items-center overflow-hidden rounded-md border ${skin.border} ${skin.chip}`}
     >
       <button
         type="button"
         aria-label="Decrease quantity"
-        onClick={() => cart.setQty(storeSlug, productId, variantId, qty - 1)}
-        className={`flex h-full w-9 shrink-0 items-center justify-center transition hover:opacity-70 ${skin.text}`}
+        disabled={qty <= 1}
+        onClick={() => onChange(clamp(qty - 1))}
+        className={`flex h-full w-10 items-center justify-center transition hover:opacity-70 disabled:opacity-40 ${skin.text}`}
       >
         <MinusIcon className="h-3.5 w-3.5" />
       </button>
-      <span className="min-w-8 text-center text-sm font-bold text-brand">
-        {qty}
-      </span>
+      <input
+        type="text"
+        inputMode="numeric"
+        aria-label="Quantity"
+        value={qty}
+        onChange={(e) => {
+          const parsed = Number(e.target.value.replace(/\D/g, ''))
+          if (parsed > 0) onChange(clamp(parsed))
+        }}
+        className={`h-full w-10 border-0 bg-transparent text-center text-sm font-bold outline-none ${skin.text}`}
+      />
       <button
         type="button"
         aria-label="Increase quantity"
-        disabled={qty >= stock}
-        onClick={() => cart.setQty(storeSlug, productId, variantId, qty + 1)}
-        className={`flex h-full w-9 shrink-0 items-center justify-center transition hover:opacity-70 disabled:text-muted ${skin.text}`}
+        disabled={qty >= max}
+        onClick={() => onChange(clamp(qty + 1))}
+        className={`flex h-full w-10 items-center justify-center transition hover:opacity-70 disabled:opacity-40 ${skin.text}`}
       >
         <PlusIcon className="h-3.5 w-3.5" />
       </button>
     </span>
-    </>
   )
 }
 

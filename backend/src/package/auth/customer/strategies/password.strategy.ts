@@ -12,8 +12,7 @@ import {
 } from "../../verification/verification.service.js";
 import {
   customerAuthSelect,
-  toPublicCustomer,
-  customerPrincipal,
+  authResult,
 } from "../customer.shared.js";
 import type { CustomerAuthResult } from "../customer.shared.js";
 import type {
@@ -103,11 +102,7 @@ export async function verifyRegistration(
     select: customerAuthSelect,
   });
 
-  return {
-    principal: customerPrincipal(customer.id),
-    customer: toPublicCustomer(customer),
-    isNewUser: true,
-  };
+  return authResult(customer, true);
 }
 
 export async function login(input: PasswordLoginInput): Promise<CustomerAuthResult> {
@@ -128,11 +123,7 @@ export async function login(input: PasswordLoginInput): Promise<CustomerAuthResu
     throw HttpError.unauthorized("Invalid email or password");
   }
 
-  return {
-    principal: customerPrincipal(row.id),
-    customer: toPublicCustomer(row),
-    isNewUser: false,
-  };
+  return authResult(row);
 }
 
 /**

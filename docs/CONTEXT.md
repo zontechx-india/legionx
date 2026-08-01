@@ -32,14 +32,16 @@ The first implementation will be for a **Cricket Bat Store**, but the architectu
 - Create and manage own online stores (a single account can own multiple
   stores; one is "active" at a time — see Store Creation & Management)
 
-## Admin
-- Manage products
-- Manage categories
-- Manage inventory
-- Manage orders
-- Manage shipping charges
-- Manage banners
-- View dashboard
+## Admin (Unie Max platform staff)
+- View the platform dashboard (revenue, orders, stores, customers, trends)
+- Oversee orders and payments across every store
+- Oversee the seller catalog; hide a listing that breaks the rules
+- Suspend / restore a store; verify a seller's payout account
+- Block / unblock a customer account
+- Send platform announcements
+- Review the admin activity log
+- Manage admin users (super admins)
+- Manage shipping charges and banners *(planned)*
 
 ---
 
@@ -672,17 +674,54 @@ This approach provides a flexible authentication experience while ensuring that 
 
 ---
 
-# Admin Dashboard
+# Platform Admin Console (`/admin`)
 
-Display
+The Unie Max operator's console — a **separate application** from the
+storefront (its own bundle, downloaded only by someone who opens `/admin`),
+sharing the same look through one token layer. Fully responsive: a fixed
+sidebar on a laptop, a drawer on a phone, and every table becomes a stacked
+card list below `md`.
 
-- Total Products
-- Total Categories
-- Total Orders
-- Pending Orders
-- Delivered Orders
-- Revenue
-- Low Stock Products
+Sign-in is email + password only (accounts are provisioned, there is no
+self-service signup or reset). Because it is the highest-privilege surface,
+the session **refreshes silently every 10 minutes**, **signs out after 30
+minutes idle**, and drops straight to the login screen if the session is
+revoked from anywhere else.
+
+- **Dashboard** — the platform's health in one screen: revenue, orders,
+  stores and customers up top (each linking to the page that can act on it);
+  a revenue/orders trend over 7 / 30 / 90 days; the payment split
+  (online vs cash); the order pipeline; top stores and products; a low-stock
+  watch list; and a banner when the payment gateway or push notifications
+  aren't configured.
+- **Orders** — every order across every store, filterable by status, payment
+  status, method, store and date, searchable by order number, customer name,
+  phone, store or gateway reference. The detail page shows items, money,
+  contact/delivery snapshot, the payment reference and a lifecycle timeline.
+  **Deliberately read-only** — the seller moves their own orders along, and
+  the platform overriding that would make their dashboard lie.
+- **Payments** — the same orders through the money lens: settlement status,
+  method, gateway reference, and per-status totals for whatever is filtered.
+- **Products** — the seller catalog across all stores, with inventory views
+  (low stock, out of stock) and the platform's one moderation lever:
+  **hide a listing** (with a reason the seller is told). It flips the same
+  visibility switch the seller uses, so there is never a contradiction.
+- **Stores & sellers** — every store, published, draft or suspended, with its
+  owner, catalog size, orders and revenue. Two powers: **suspend a store**
+  (removes it from the marketplace and stops new orders, while the owner
+  keeps access to fix the cause) and **verify a payout account** manually —
+  the admin half of bank verification, with a required note on failure.
+- **Customers** — buyers and sellers together (they are the same account
+  type), with **blocking**: no future sign-in by any method, and every signed-in
+  device logged out at once.
+- **Notifications** — the admin's own feed, push opt-in per device, and a
+  **platform broadcast** to admins, sellers or all customers (confirmed with
+  a preview, since it can't be recalled).
+- **Activity log** — an append-only record of every change an admin has made:
+  who, what, when, from which IP. Never edited or deleted.
+- **Admin users** (super admins only) — create admins, change roles,
+  deactivate, reset passwords. The platform refuses to let anyone change
+  their own role, deactivate themselves, or remove the last super admin.
 
 ---
 
@@ -695,10 +734,22 @@ back to the account's login email when the store's checkout doesn't
 collect one; emails carry deep links when the storefront origin is
 configured.
 
+**Live (in-app + push):** every account — customer, seller and admin — has a
+**notification bell** with an unread badge, and can switch on **browser push
+notifications per device** so alerts arrive with the tab closed. The feed is
+kept server-side, so nothing is lost when a device is offline or has push
+turned off. What fires: order placed (customer, seller and admins), order
+Confirmed / Shipped / Delivered / Cancelled (customer), store suspended or
+restored, product hidden or restored, payout account verified or failed
+(seller), account unblocked (customer), and admin broadcasts. Push is
+strictly opt-in and only ever requested from a button the person pressed.
+Full detail: `docs/PUSH_NOTIFICATIONS.md`.
+
 Future:
 
 - Order SMS updates
 - WhatsApp Updates
+- Per-kind notification preferences
 
 ---
 

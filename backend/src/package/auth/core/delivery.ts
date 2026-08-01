@@ -1,7 +1,7 @@
 import type { FastifyReply } from "fastify";
 import { ok } from "../../../utils/response.js";
 import { setAuthCookies, clearAuthCookies } from "./cookies.js";
-import type { IssuedTokens } from "./authCore.types.js";
+import type { IssuedTokens, PrincipalType } from "./authCore.types.js";
 
 /**
  * Client-profile response shaping. The login/refresh controllers call one of
@@ -31,8 +31,8 @@ export function deliverMobile(
   });
 }
 
-/** Web logout: wipe the auth cookies. */
-export function deliverWebLogout(reply: FastifyReply) {
-  clearAuthCookies(reply);
+/** Web logout: wipe THIS surface's auth cookies (never the other's). */
+export function deliverWebLogout(reply: FastifyReply, type: PrincipalType) {
+  clearAuthCookies(reply, type);
   return ok({ signedOut: true });
 }

@@ -13,6 +13,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:status": "prisma migrate status",
     "create-admin": "tsx src/scripts/createAdmin.ts",
+    "push-keys": "tsx src/scripts/generatePushKeys.ts",
     "backfill-catalog": "tsx src/scripts/backfillCatalog.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -36,6 +37,7 @@
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.22.0",
     "prisma": "^7.8.0",
+    "web-push": "^3.6.7",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -43,6 +45,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^26.1.1",
     "@types/pg": "^8.20.0",
+    "@types/web-push": "^3.6.4",
     "nodemon": "^3.1.14",
     "tsx": "^4.23.0",
     "typescript": "^7.0.2"

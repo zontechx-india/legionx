@@ -192,10 +192,49 @@ Then from the local machine: `http://13.206.249.204/` (storefront),
 If the backend crash-loops, check `pm2 logs uniemax-backend --nostream --lines 40`.
 
 Notes:
-- Schema changes are applied to Supabase from the dev machine (`prisma db push`
-  per project convention) — the server only ever runs `prisma generate`.
+- Schema changes ship as **committed migrations**: `npm run db:migrate` on the
+  dev machine creates + applies one, and the server runs `npm run db:deploy`
+  (plus `prisma generate`). `prisma db push` is no longer used — earlier
+  pushed columns are baselined by `prisma/migrations/1_payment_sessions`.
 - Env files are not in git; they persist on the server across deploys. Only
   re-upload them (pscp) if a new env var was added.
+
+### The `/admin` console needs its own nginx fallback
+
+The admin app is a **second SPA** (`admin.html`) served at `/admin` on the same
+origin, with client-side routes like `/admin/orders/abc`. Each site config
+(`uniemax`, `uniemax-domain`, `uniemax-prod`, `uniemax-prod-domain`) needs the
+`/admin` block **before** the catch-all:
+
+```nginx
+location /admin { try_files $uri /admin.html; }   # console deep links
+location /      { try_files $uri /index.html;  }  # storefront
+```
+
+Without it, `/admin` still loads (nginx resolves the extensionless file) but a
+refresh on any deeper path falls through to the storefront. Verify after a
+deploy:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Accept: text/html' http://127.0.0.1:8080/admin/orders   # 200
+curl -s -H 'Accept: text/html' http://127.0.0.1:8080/admin/orders | grep -o 'assets/admin'          # matches
+```
+
+### Web Push env (`VAPID_*`)
+
+Push notifications need a VAPID key pair in the server's `backend/.env`.
+Generate it **on the server, once**, and never rotate it casually — rotating
+invalidates every browser subscription:
+
+```bash
+cd ~/uniemax/backend && npm run push-keys   # paste the three lines into .env
+pm2 restart uniemax-backend
+```
+
+Without the keys the app still works — the in-app notification bell fills
+normally and the server logs each push instead of sending it. Push also
+requires HTTPS, which both domains already have. Full detail:
+[`PUSH_NOTIFICATIONS.md`](./PUSH_NOTIFICATIONS.md).
 - pm2 process list is persisted (`pm2 save`), so `uniemax-backend` survives a
   reboot (pm2 startup is configured for the `ubuntu` user).
 

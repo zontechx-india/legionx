@@ -27,9 +27,9 @@ export function sessionRoutes(expectType: PrincipalType): FastifyPluginAsync {
     // ---- Web (cookies) --------------------------------------------------
     app.post(
       "/web/refresh",
-      { preHandler: requireCsrf },
+      { preHandler: requireCsrf(expectType) },
       async (request: FastifyRequest, reply: FastifyReply) => {
-        const token = readRefreshCookie(request);
+        const token = readRefreshCookie(request, expectType);
         if (!token) throw HttpError.unauthorized("Missing refresh cookie");
         const tokens = await rotateSession(token, sessionMeta(request), expectType);
         return deliverWeb(reply, tokens);
@@ -37,9 +37,9 @@ export function sessionRoutes(expectType: PrincipalType): FastifyPluginAsync {
     );
 
     app.post("/web/logout", async (request, reply) => {
-      const token = readRefreshCookie(request);
+      const token = readRefreshCookie(request, expectType);
       if (token) await revokeSession(token);
-      return deliverWebLogout(reply);
+      return deliverWebLogout(reply, expectType);
     });
 
     app.post(
@@ -50,7 +50,7 @@ export function sessionRoutes(expectType: PrincipalType): FastifyPluginAsync {
           expectType === "admin" ? request.admin : request.customer;
         if (!principal) throw HttpError.unauthorized();
         await revokeAllSessions(principal.id, expectType);
-        return deliverWebLogout(reply);
+        return deliverWebLogout(reply, expectType);
       },
     );
 

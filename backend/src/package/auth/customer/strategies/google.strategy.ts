@@ -3,8 +3,7 @@ import { HttpError } from "../../../../utils/httpError.js";
 import { oauthVerifier } from "../../providers/index.js";
 import {
   customerAuthSelect,
-  toPublicCustomer,
-  customerPrincipal,
+  authResult,
 } from "../customer.shared.js";
 import type { CustomerAuthResult } from "../customer.shared.js";
 import type {
@@ -49,11 +48,7 @@ async function signInWithProfile(
     select: { customer: { select: customerAuthSelect } },
   });
   if (linked) {
-    return {
-      principal: customerPrincipal(linked.customer.id),
-      customer: toPublicCustomer(linked.customer),
-      isNewUser: false,
-    };
+    return authResult(linked.customer);
   }
 
   if (!profile.email) {
@@ -89,11 +84,7 @@ async function signInWithProfile(
       },
       select: customerAuthSelect,
     });
-    return {
-      principal: customerPrincipal(customer.id),
-      customer: toPublicCustomer(customer),
-      isNewUser: false,
-    };
+    return authResult(customer);
   }
 
   // 3. Brand-new user → create the account with the provider identity.
@@ -107,9 +98,5 @@ async function signInWithProfile(
     },
     select: customerAuthSelect,
   });
-  return {
-    principal: customerPrincipal(customer.id),
-    customer: toPublicCustomer(customer),
-    isNewUser: true,
-  };
+  return authResult(customer, true);
 }

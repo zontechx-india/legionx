@@ -60,6 +60,17 @@ const storeShellSelect = {
 } satisfies Prisma.StoreSelect;
 
 /**
+ * A store is live to the public when it is published AND not suspended by a
+ * platform admin. Suspension deliberately outranks the owner's own publish
+ * switch — and it hides the store from its owner's draft preview too, since
+ * a suspended store is off the marketplace for everyone.
+ */
+export const PUBLIC_STORE_VISIBILITY = {
+  isPublished: true,
+  suspendedAt: null,
+} satisfies Prisma.StoreWhereInput;
+
+/**
  * Resolves a publicly visible store by slug, or 404. "Visible" means
  * published — or unpublished but owned by the viewer (the draft preview).
  */
@@ -67,9 +78,8 @@ async function getVisibleStore(slug: string, viewerId?: string) {
   const store = await prisma.store.findFirst({
     where: {
       slug,
-      ...(viewerId
-        ? { OR: [{ isPublished: true }, { ownerId: viewerId }] }
-        : { isPublished: true }),
+      suspendedAt: null,
+      ...(viewerId ? { OR: [{ isPublished: true }, { ownerId: viewerId }] } : { isPublished: true }),
     },
     select: storeShellSelect,
   });
@@ -174,7 +184,7 @@ const STORE_PREVIEW_IMAGES = 4;
  * anything the store page would hide.
  */
 export async function listPublicStores(query: PublicStoreListQuery) {
-  const where: Prisma.StoreWhereInput = { isPublished: true };
+  const where: Prisma.StoreWhereInput = { ...PUBLIC_STORE_VISIBILITY };
 
   const [total, rows] = await Promise.all([
     prisma.store.count({ where }),

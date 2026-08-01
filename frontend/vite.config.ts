@@ -5,35 +5,37 @@ import tailwindcss from '@tailwindcss/vite'
 import type { Connect, Plugin } from 'vite'
 
 /**
- * Dev-only subdomain router.
+ * Dev-only admin router — mirrors what nginx does in production.
  *
- * In production, `admin.shop.example.com` and `shop.example.com` are two
- * separate origins routed by nginx / CloudFront to the two built HTML entries.
- * In local dev we emulate that from a single Vite server: any HTML navigation
- * whose Host starts with `admin.` is rewritten to `/admin.html`; everything
- * else falls through to the storefront (`index.html`).
+ * The admin console is a SEPARATE build (`admin.html`) served on the same
+ * origin under the `/admin` path, so its bundle never ships to a customer.
+ * Because it is a client-side router, every deep link (`/admin/orders/x`)
+ * must also return `admin.html`, exactly like nginx's
+ * `location /admin { try_files $uri /admin.html; }`.
  *
- *   Storefront →  http://localhost:5173  or  http://shop.localhost:5173
- *   Admin      →  http://admin.localhost:5173
+ *   Storefront →  http://localhost:5173
+ *   Admin      →  http://localhost:5173/admin
  *
- * (`*.localhost` resolves to 127.0.0.1 automatically in modern browsers.)
+ * The legacy `admin.` sub-domain form still resolves, so an existing
+ * bookmark keeps working (`*.localhost` points at 127.0.0.1 automatically).
  */
-function subdomainRouter(): Plugin {
+function adminRouter(): Plugin {
   const handler: Connect.NextHandleFunction = (req, _res, next) => {
     const host = (req.headers.host ?? '').split(':')[0]
-    const accept = req.headers.accept ?? ''
-    const isAdminHost = host.startsWith('admin.')
-    const isHtmlNav = accept.includes('text/html')
+    const path = (req.url ?? '/').split('?')[0]
+    const isHtmlNav = (req.headers.accept ?? '').includes('text/html')
+    const isAdmin =
+      host.startsWith('admin.') || path === '/admin' || path.startsWith('/admin/')
 
     // Only rewrite top-level navigations; let assets (JS/CSS/img) pass through.
-    if (isAdminHost && isHtmlNav) {
+    if (isAdmin && isHtmlNav) {
       req.url = '/admin.html'
     }
     next()
   }
 
   return {
-    name: 'subdomain-router',
+    name: 'admin-router',
     configureServer(server) {
       server.middlewares.use(handler)
     },
@@ -45,7 +47,7 @@ function subdomainRouter(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss(), subdomainRouter()],
+  plugins: [react(), tailwindcss(), adminRouter()],
   server: {
     // Accept requests for *.localhost subdomains.
     host: true,

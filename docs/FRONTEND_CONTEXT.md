@@ -7,25 +7,34 @@
 
 ## Core Principle — Two Apps, One Repo
 
-The frontend ships **two completely separate applications** deployed to two
-origins:
+The frontend ships **two completely separate applications** — two HTML
+entries, two bundles, one origin:
 
-| App        | Origin                    | Audience            | API surface           |
-| ---------- | ------------------------- | ------------------- | --------------------- |
-| Storefront | `shop.example.com`        | Customers (public)  | `/api/v1/...`         |
-| Admin      | `admin.shop.example.com`  | Store operators     | `/api/v1/admin/...`   |
+| App        | Served at        | Audience                | API surface           |
+| ---------- | ---------------- | ----------------------- | --------------------- |
+| Storefront | `/` (everything else) | Customers & sellers | `/api/v1/...`         |
+| Admin      | **`/admin`**     | Unie Max platform staff | `/api/v1/admin/...`   |
 
 This mirrors the backend, which already splits its routes into a public
 (customer) subtree and an `/admin` subtree (see [BACKEND_CONTEXT.md](./BACKEND_CONTEXT.md)).
 
-**Why separate:**
+**Why separate builds:**
 
 - **Security** — admin code, routes, and views never ship in the bundle a
-  customer downloads. The two are separate builds.
+  customer downloads. `admin.html` is only fetched by someone who asked for
+  `/admin`.
 - **Isolation** — a change to the admin console cannot break the storefront and
-  vice versa.
-- **Deployment** — each origin can be cached, scaled, and access-controlled
-  independently (e.g. admin behind IP allow-list / WAF).
+  vice versa. They share the token layer (`src/index.css`) and `src/shared/`,
+  and nothing else.
+- **Deployment** — the `/admin` path can be cached and access-controlled
+  independently (WAF / IP allow-list at the edge) on top of the backend's
+  `requireAdmin` guard.
+
+**Why one origin rather than an `admin.` sub-domain** (the earlier plan): the
+API's auth cookies are same-origin, so a second origin would need CORS +
+`SameSite=None` and a second TLS certificate for no security gain — the
+bundle separation is what keeps admin code off a customer's machine, not the
+hostname. The sub-domain form still resolves in dev for old bookmarks.
 
 ---
 
@@ -51,7 +60,7 @@ Auth talks to the live backend (`package/auth`) via `src/shared/auth/`:
 
 | File | Purpose |
 | ---- | ------- |
-| `http.ts`    | Axios client: `withCredentials`, echoes the `csrf_token` cookie in `X-CSRF-Token` on mutations, normalizes the error envelope into `ApiError` |
+| `http.ts`    | Axios client: `withCredentials`, echoes the surface's CSRF cookie in `X-CSRF-Token` on mutations (`um_admin_csrf` for `/api/v1/admin/**`, `csrf_token` otherwise — chosen from the request URL, so no boot-time initialisation has to be respected), normalizes the error envelope into `ApiError` |
 | `authApi.ts` | Typed endpoints: `customerAuth` (register, login, google, requestOtp/verifyOtp, forgot/resetPassword, linkRequest/linkVerify, me, refresh, logout) + `adminAuth` (login, me, refresh, logout) + `resolveSession` |
 | `useSession.ts` | Session hook: on mount probes `/me` (one refresh retry on 401) → `loading / guest / authed`; exposes `signedIn(user)` / `signOut()` |
 
@@ -772,8 +781,137 @@ for crawlers wait for SSR/prerender).
   `PATCH` toggle endpoints); disabled rows dim and show a "Disabled"
   chip — disabled items are hidden from the public storefront.
 
-The **admin** gate still swaps to a placeholder `Dashboard` (real user +
-sign-out, no router yet).
+---
+
+## Admin console (`src/admin/`) — the platform operator's app
+
+Served at **`/admin`** on the same origin (see "Two Apps, One Repo"). The
+router uses `basename="/admin"`, so its own paths are written without the
+prefix; nginx returns `admin.html` for every path under `/admin`
+(`try_files $uri /admin.html`) and the Vite dev/preview server does the same
+via the `adminRouter` plugin, so deep links work in both.
+
+### Shell & session hardening
+
+`AdminApp` probes the cookie session (`GET /admin/auth/me`, one refresh retry)
+and swaps between the login page and the console. Because this is the
+highest-privilege surface on the platform, `app/adminSession.tsx` adds three
+rules the storefront does not have:
+
+1. **Silent refresh every 10 min** — the access token lives 15, so a long
+   shift on one screen never dies mid-action. It's a cookie exchange; no
+   token touches JS.
+2. **Idle sign-out after 30 min** — an unattended console on a shared desk is
+   the real risk. Activity is `pointerdown`/`keydown`/`scroll`/`focus`;
+   `visibilitychange` deliberately does **not** count, because a background
+   tab is not someone at the desk.
+3. **Global 401 handling** — an axios interceptor drops the whole app to the
+   login screen the moment any admin call comes back unauthorised (session
+   revoked elsewhere, admin deactivated), instead of leaving half-loaded
+   pages showing stale data. The login POST is exempt: a 401 there is a form
+   error, not an expired session.
+
+`layout/AdminLayout.tsx` is the shell — **one nav, two presentations**: the
+same `NAV_GROUPS` render as a fixed 16rem rail from `lg` up and as a slide-in
+drawer below it, so a nav change lands in both at once. The drawer closes on
+navigation and locks body scroll while open. Groups: Overview · Commerce
+(Orders, Payments, Products) · Accounts (Stores & sellers, Customers) ·
+Platform (Notifications, Activity log, Admin users — the last SUPER_ADMIN-only,
+and the API enforces that independently).
+
+### Isolated UI kit (`admin/ui/`)
+
+A console is dense, tabular and keyboard-driven; the storefront is spacious
+and promotional. Sharing components would force every change to satisfy both,
+so the admin has its own kit — while sharing the **token layer**, so the two
+still look like one product.
+
+| File | What |
+| ---- | ---- |
+| `primitives.tsx` | Card/CardHeader/PageHeader, Chip (6 tones), Button, TextInput/TextArea/SelectInput, Empty/Error/Skeleton, Detail row |
+| `DataTable.tsx` | **The** table + `Pagination`. Below `md` each row re-renders as a stacked card (that's why every column declares a `header` string; one column may be `primary`, and `hideOnMobile` drops detail). One definition per page instead of a desktop table plus a drifting mobile list. |
+| `Toolbar.tsx` | Filter row: debounced `SearchInput`, `FilterSelect`, scrollable status `Tabs` |
+| `statusMeta.tsx` | One label + tone per domain state, defined once — so "Shipped" is the same word and color everywhere. Every chip carries its label; color is a second signal, never the only one. |
+| `charts.tsx` | `TrendChart` · `BarList` · `Donut` · `Sparkline` · `ChartFrame` (see below) |
+| `StatTile.tsx` | Headline number + optional sparkline; a `to` makes it a link |
+| `format.ts` | `formatMoney/Exact/Short`, counts, dates, `formatRelative`, `formatPriceRange` |
+
+**Money is a decimal string** everywhere (`"14250.00"`) — that is what Prisma
+`Decimal` serialises to — and is converted to a number only at the moment of
+display, never for arithmetic. Totals always come from the server.
+
+### Charts — hand-drawn SVG, no dependency
+
+Rules they follow (constraints, not taste):
+
+- **One axis, one series.** The trend chart shows revenue **or** orders,
+  switched by a toggle. ₹ and counts share no scale; overlaying them on two
+  y-axes invents a correlation.
+- **Color is assigned by entity, never rank** — `--chart-1` is always money,
+  `--chart-2` always counts, whatever a filter does.
+- **Colors come from tokens.** `index.css` defines `--chart-1/2/-grid` per
+  scheme. The brand gold `#f5b400` is a *fill* color, not a mark color — on a
+  white chart surface it's 1.79:1 contrast and outside the readable lightness
+  band, so a 2px line in it disappears. The chart steps (`#b07a00`/`#1863dc`
+  light, `#b88500`/`#4b84e0` dark) are the nearest steps of the same two hues
+  that pass the lightness band, chroma floor, colorblind separation (ΔE ≈ 34
+  normal / 29 protan) and 3:1-against-surface checks — **validated for both
+  schemes**, with dark selected against its own `#1e1e1e` surface rather than
+  flipped.
+- **Hover is part of the chart**: crosshair + tooltip on the trend (hit
+  targets are full-height columns, far bigger than the marks), per-slice
+  hover on the donut. Values are direct-labeled selectively — never a number
+  on every point.
+- Reserved status colors (danger for Cancelled) are used as *status*, never
+  as "series 3".
+
+### Pages (`admin/pages/`, all lazy chunks)
+
+| Route | Page |
+| ----- | ---- |
+| `/` | **Dashboard** — one request (`GET /admin/dashboard`) feeds everything, so tiles can't disagree with the chart beside them. Range toggle 7/30/90d, revenue/orders trend, payment-split donut, order-pipeline bars, top stores/products, latest orders, low stock, and an integration-health banner when the gateway or push is unconfigured. **Every counter is a link** — pipeline bars and low-stock rows land on the target page already filtered. |
+| `/orders`, `/orders/:id` | Platform-wide orders. Read-only: the seller owns fulfilment. Detail adds the joins the seller can't see (customer account, gateway reference) plus a lifecycle timeline built from the order's own timestamps. |
+| `/payments` | The same order rows through the money lens, with per-status totals for the current filter. |
+| `/products` | Seller catalog across stores, with the hide/restore moderation switch (always asks for a reason — the seller is notified immediately). |
+| `/stores`, `/stores/:id` | Stores + owners. Detail carries suspension and **manual payout-account verification** (account numbers masked to the last 4). |
+| `/customers`, `/customers/:id` | Buyers and sellers (same account type), with blocking. The dialog states both effects: no future sign-in **and** every session revoked. |
+| `/notifications` | This admin's feed, the per-device push toggle, and the platform broadcast (confirm-with-preview — a broadcast can't be recalled). |
+| `/activity` | The append-only admin audit trail, filterable by action and record type. |
+| `/admins` | SUPER_ADMIN only: create, promote/demote, deactivate, reset password. |
+
+`features/adminApi.ts` is the one place that knows the admin API's shape;
+`features/useAdminQuery.ts` holds the two data hooks — `useAdminQuery` (one
+resource) and `useAdminList` (**filters live in the URL**, so back/forward
+work, a filtered view is shareable, and a filter change resets to page 1).
+Both discard out-of-order responses via a request counter.
+
+---
+
+## Notifications & push (both apps)
+
+Shared plumbing, one bell per app:
+
+- `shared/notifications/notificationsApi.ts` — feed + subscription client;
+  `notificationsApi('admin' | 'customer')` picks the prefix, the endpoints are
+  otherwise identical (the server decides whose feed it is from the session).
+- `shared/push/usePushSubscription.ts` — the whole Web Push handshake as a
+  hook, resolving to `checking | unsupported | unconfigured | denied | off |
+  on` so the UI can *explain* rather than throw. **Permission is only ever
+  requested from a button press** — an unprompted dialog is the fastest way
+  to get notifications blocked for good, and a block can't be undone from the
+  page.
+- `public/push-sw.js` — the service worker. Deliberately tiny: renders the
+  notification, routes the click to an existing tab, **caches nothing and
+  intercepts no fetches**, so it can never serve a stale app shell.
+- `admin/layout/NotificationBell.tsx` and
+  `storefront/layout/NotificationBell.tsx` — unread badge (polled once a
+  minute; the list loads only when opened), latest items, per-device push
+  toggle. The storefront bell is how a **seller** learns they have an order
+  without watching their inbox; it uses a real navigation for `/order/…`
+  links, which live in the anonymous public router the authed router doesn't
+  know.
+
+Full architecture: [`PUSH_NOTIFICATIONS.md`](./PUSH_NOTIFICATIONS.md).
 
 ---
 
@@ -941,12 +1079,24 @@ frontend/
     │           ├── StoreCategoriesPage.tsx # Add/list/rename/collapse/toggle/delete categories
     │           ├── StoreProductsPage.tsx # Add/list/toggle/delete products (category-gated)
     │           └── ActiveSwitch.tsx     # Enable/disable pill switch (rows)
-    └── admin/
+    └── admin/                   # Platform console — served at /admin
         ├── main.tsx             # Mounts <AdminApp/>
-        ├── AdminApp.tsx         # Session gate (splash ↔ login ↔ dashboard)
-        └── pages/
-            ├── LoginPage.tsx    # Email + password login (real API)
-            └── Dashboard.tsx    # Signed-in placeholder (real admin + logout)
+        ├── AdminApp.tsx         # Session gate + BrowserRouter basename="/admin"
+        ├── app/
+        │   ├── router.tsx       # Lazy routes under the shell
+        │   ├── adminSession.tsx # Context + silent refresh, idle logout, 401 drop-out
+        │   └── navigation.ts    # NAV_GROUPS + per-path document titles
+        ├── layout/
+        │   ├── AdminLayout.tsx  # Rail (lg+) / drawer (below) + top bar
+        │   ├── NotificationBell.tsx # Unread badge + feed dropdown
+        │   └── icons.tsx        # Six inline shell glyphs
+        ├── ui/                  # ISOLATED console kit (see "Admin console")
+        │   ├── primitives.tsx · DataTable.tsx · Toolbar.tsx
+        │   ├── statusMeta.tsx · StatTile.tsx · charts.tsx · format.ts
+        ├── features/
+        │   ├── adminApi.ts      # Typed client for /api/v1/admin/**
+        │   └── useAdminQuery.ts # useAdminQuery + useAdminList (URL filters)
+        └── pages/               # LoginPage + 11 lazy console pages
 ```
 
 Keep app-specific code under `storefront/` or `admin/`, and put anything both
@@ -1194,21 +1344,23 @@ build: {
 (`dist/assets/storefront-*.js`, `dist/assets/admin-*.js`). Shared code is
 factored into a common chunk; app-specific code stays in its own bundle.
 
-### 2. Dev server — subdomain emulation
+### 2. Dev server — `/admin` routing
 
-In production the two subdomains are two origins routed by the CDN / reverse
-proxy. Locally, a small Vite middleware (`subdomainRouter` in `vite.config.ts`)
-emulates this from one dev server by inspecting the `Host` header:
+In production nginx serves `admin.html` for every path under `/admin`
+(`location /admin { try_files $uri /admin.html; }`). A small Vite middleware
+(`adminRouter` in `vite.config.ts`) does exactly the same locally, for both
+`npm run dev` and `npm run preview`, so a deep link behaves identically in
+all three:
 
-| URL                                | Serves            |
-| ---------------------------------- | ----------------- |
-| `http://localhost:5173`            | Storefront        |
-| `http://shop.localhost:5173`       | Storefront        |
-| `http://admin.localhost:5173`      | Admin             |
-| `http://admin.localhost:5173/...`  | Admin (deep links)|
+| URL                                | Serves             |
+| ---------------------------------- | ------------------ |
+| `http://localhost:5173`            | Storefront         |
+| `http://localhost:5173/admin`      | Admin              |
+| `http://localhost:5173/admin/orders` | Admin (deep link)|
+| `http://admin.localhost:5173`      | Admin (legacy sub-domain form, still honored) |
 
-`*.localhost` resolves to `127.0.0.1` automatically in modern browsers — no
-hosts-file edits needed for dev.
+Only **top-level navigations** are rewritten (`Accept: text/html`), so JS, CSS
+and images under `/admin/...` still resolve normally.
 
 ---
 
@@ -1224,7 +1376,11 @@ npm run dev                   # single dev server, both apps; /api proxies to :4
 Then open:
 
 - Storefront → <http://localhost:5173>  (email+password · Google dev · phone OTP; dev code **123456**)
-- Admin      → <http://admin.localhost:5173>  (email/password — create one with `npm run create-admin`)
+- Admin      → <http://localhost:5173/admin>  (email/password — create one with `npm run create-admin`)
+
+For push notifications in dev, generate a VAPID pair once
+(`cd backend && npm run push-keys`) and paste it into `backend/.env`; without
+it the feed still fills and the server logs each push instead of sending it.
 
 `VITE_API_URL` is only needed when the API is **not** reachable through the
 dev proxy (e.g. a remote backend).
@@ -1242,24 +1398,32 @@ Other scripts: `npm run build` (typecheck + build both), `npm run preview`
    lands. It also brings the real refund flow (cancelling a paid order
    currently marks it refunded, which today only hits dev-simulated
    payments).
-2. Add a router to the **admin** app (the platform-admin gate still renders
-   a single placeholder dashboard).
-3. Swap the Google dev-simulation for the official Google Identity Services
+2. Swap the Google dev-simulation for the official Google Identity Services
    button once `GOOGLE_CLIENT_ID` is decided (same `customerAuth.google()` call).
-4. Account section UI for the remaining auth self-service (change/set password,
+3. Account section UI for the remaining auth self-service (change/set password,
    phone/email linking — endpoints already live) and the remaining account
    placeholder (`/profile`). Wishlist/settings return as routes only when
    the features are actually built.
-5. Shipping-charge rules (fixed/district/state — orders currently ship
+4. Shipping-charge rules (fixed/district/state — orders currently ship
    free) and customer-side order tracking/cancellation.
+5. Per-kind notification preferences (a subscribed device currently gets
+   every notification for its principal; the `kind` column is already there).
 
 ---
 
 ## Production Deployment Notes
 
 - Build once (`npm run build`) → deploy `dist/` behind a proxy/CDN.
-- Route `admin.shop.example.com` → serve `admin.html` (SPA fallback to
-  `admin.html`); everything else → `index.html` (SPA fallback to `index.html`).
-- Lock the admin origin down separately (WAF / IP allow-list / auth at the edge)
-  in addition to the backend's admin-auth preHandler.
+- nginx needs **two SPA fallbacks**, and `/admin` must come first:
+  ```nginx
+  location /admin { try_files $uri /admin.html; }   # console deep links
+  location /      { try_files $uri /index.html;  }  # storefront
+  ```
+  Without the first block, `/admin/orders` falls through to the storefront
+  and the console 404s on refresh.
+- Lock `/admin` down separately (WAF / IP allow-list / auth at the edge) in
+  addition to the backend's `requireAdmin` preHandler.
+- `push-sw.js` is served from the site root (`/push-sw.js`) — it must not be
+  rewritten by either fallback, which `try_files $uri` already guarantees
+  since the file exists. Push also requires **HTTPS** (localhost excepted).
 - Set `VITE_API_URL` per environment at build time.

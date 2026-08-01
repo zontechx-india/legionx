@@ -162,7 +162,7 @@ export async function createOrder(
   // Only LIVE stores take orders — an owner's draft preview can browse but
   // never sell, so drafts deliberately 404 here like they do for anyone else.
   const store = await prisma.store.findFirst({
-    where: { slug: storeSlug, isPublished: true },
+    where: { slug: storeSlug, isPublished: true, suspendedAt: null },
     select: {
       id: true,
       name: true,
@@ -171,7 +171,7 @@ export async function createOrder(
       shipping: true,
       checkout: true,
       // Owner's account email — the "new order" alert recipient.
-      owner: { select: { email: true } },
+      owner: { select: { id: true, email: true } },
     },
   });
   if (!store) throw HttpError.notFound("Store not found");
@@ -397,7 +397,7 @@ export async function createOrder(
   // Fire-and-forget: confirmation to the customer + alert to the seller.
   // Gateway orders wait for the money — the payments module sends these
   // same notifications when the payment settles.
-  if (!viaGateway) notifyOrderPlaced(shaped, customerId, store.owner.email);
+  if (!viaGateway) notifyOrderPlaced(shaped, customerId, store.owner);
   return { ...shaped, payment: payment ?? null };
 }
 

@@ -3,6 +3,7 @@ import { Link, Outlet } from 'react-router-dom'
 import { ThemeToggle } from '../../shared/theme'
 import { AppLogoMark } from '../../shared/ui/AppLogo'
 import { AccountMenu } from './AccountMenu'
+import { NotificationBell } from './NotificationBell'
 
 /**
  * Authed storefront shell — a sticky top bar over the page, nothing more.
@@ -25,6 +26,7 @@ export function AppLayout() {
         </Link>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          <NotificationBell />
           <ThemeToggle />
           <AccountMenu />
         </div>

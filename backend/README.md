@@ -32,6 +32,7 @@ Verify: `curl http://localhost:4000/health`
 | `npm run db:deploy` | Apply pending migrations (production deploys)    |
 | `npm run db:status` | Show applied/pending migrations                  |
 | `npm run create-admin -- <email> <pw> [name]` | Create/reset an admin account  |
+| `npm run push-keys` | Print a fresh VAPID key pair for Web Push — run once per environment and paste into `.env` |
 | `npm run backfill-catalog` | Fill missing store category/product slugs and recompute product price/stock aggregates. Idempotent — safe to re-run. |
 
 ## Environment (`.env`)
@@ -72,6 +73,9 @@ Verify: `curl http://localhost:4000/health`
 | `STORAGE_LOCAL_DIR` | Local-driver directory (default `uploads`) |
 | `MEDIA_MAX_IMAGE_MB` / `MEDIA_MAX_VIDEO_MB` / `MEDIA_MAX_LOGO_MB` | Upload size limits (defaults `5` / `50` / `2`) |
 | `MEDIA_IMAGE_TYPES` / `MEDIA_VIDEO_TYPES` | Allowed MIME types, comma-separated (defaults: `image/jpeg,image/png,image/webp,image/avif` · `video/mp4,video/webm,video/quicktime`) |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Web Push key pair — generate once per environment with `npm run push-keys`. Both set → real browser push; unset → the console driver logs instead (the in-app feed still works). **Rotating the pair invalidates every existing subscription.** See [docs/PUSH_NOTIFICATIONS.md](../docs/PUSH_NOTIFICATIONS.md) |
+| `VAPID_SUBJECT` | Contact the push service can reach you on — `mailto:` or `https:` (default `mailto:connect@zontechx.com`) |
+| `PUSH_TTL_SECONDS` | How long a push service holds an undelivered message (default `86400`) |
 
 > All auth vars (`JWT_*`, `AUTH_COOKIE_*`, `OTP_*`, OAuth client ids) are read from the
 > same `.env` but validated **inside** the self-contained
@@ -86,3 +90,18 @@ Verify: `curl http://localhost:4000/health`
 Create four files under `src/modules/<name>/` (`schema` · `service` · `controller` ·
 `routes`) and register the routes in `src/routes.ts`. See `modules/product/` for the
 reference pattern, documented in [`docs/BACKEND_CONTEXT.md`](../docs/BACKEND_CONTEXT.md).
+
+## The admin console API
+
+Everything under `/api/v1/admin` (beyond auth) lives in `src/modules/admin/`
+and is mounted **inside** the `requireAdmin` subtree, so no route repeats the
+guard. Endpoints, filters and payloads: [`docs/API.md`](../docs/API.md);
+design rationale: [`docs/BACKEND_CONTEXT.md`](../docs/BACKEND_CONTEXT.md).
+
+Two things to know before adding an endpoint there:
+
+- **Every write must call `recordAudit(request, …)`** (`adminAudit.ts`). It is
+  fire-and-forget, so it can never fail the action it describes, and the trail
+  is what makes a moderation decision reviewable later.
+- **Admin-account routes check `assertSuperAdmin`** in the controller. Guard
+  in the API, not only in the UI.

@@ -27,10 +27,25 @@ DB-backed, rotating), issued by the standalone `package/auth` module. Two princi
 distinguished by a `type` claim (`admin` / `customer`).
 
 Each login comes in **two client profiles**:
-- **Web** (`/web/*`) → tokens delivered as **httpOnly cookies** (`access_token`,
-  `refresh_token`) plus a readable `csrf_token`. State-changing cookie calls (e.g.
-  `/web/refresh`) require the cookie value echoed in an `X-CSRF-Token` header
-  (double-submit). CORS is credentialed; the browser sends cookies automatically.
+- **Web** (`/web/*`) → tokens delivered as **httpOnly cookies** plus a readable
+  CSRF cookie. State-changing cookie calls (e.g. `/web/refresh`) require that
+  cookie's value echoed in an `X-CSRF-Token` header (double-submit). CORS is
+  credentialed; the browser sends cookies automatically.
+
+  **Cookie names are namespaced per principal**, because the storefront and the
+  admin console share one origin and a browser keys cookies by
+  `(name, domain, path)` — the port is *not* part of that key, so a shared name
+  would let one login evict the other's session:
+
+  | Principal | Access | Refresh | CSRF | Token path |
+  | --------- | ------ | ------- | ---- | ---------- |
+  | customer  | `access_token` | `refresh_token` | `csrf_token` | `/` |
+  | admin     | `um_admin_access` | `um_admin_refresh` | `um_admin_csrf` | `/api/v1/admin` |
+
+  Both sessions can therefore be live in the same browser, and signing out of
+  one never touches the other. The CSRF cookie stays at `/` for both (a page at
+  `/admin` cannot read a cookie scoped to `/api/v1/admin`); it is isolated by
+  name, which is sufficient — it is not a credential.
 - **Mobile** (`/mobile/*`) → tokens returned in the JSON body
   (`accessToken`, `refreshToken`, `expiresIn`); the app sends
   `Authorization: Bearer <accessToken>`.
@@ -221,7 +236,7 @@ claimed by another account in the meantime.
 ```
 Verifies credentials, then delivers per profile:
 ```jsonc
-// web  → Set-Cookie: access_token, refresh_token, csrf_token
+// web  → Set-Cookie: um_admin_access, um_admin_refresh, um_admin_csrf
 { "success": true, "data": { "admin": { id, email, name, role, … } } }
 // mobile
 { "success": true, "data": { "admin": { id, email, name, role, … },
@@ -1217,6 +1232,209 @@ Deletes the product. Order history is preserved (order items keep a product snap
 
 ---
 
+## Notifications — `/api/v1/notifications` 🔒 customer · `/api/v1/admin/notifications` 🔒 admin
+
+The **same handlers** serve both surfaces; the guard that ran decides whose
+feed is read, so a customer token can never reach an admin's notifications.
+Every path below exists under both prefixes. Full architecture:
+[`PUSH_NOTIFICATIONS.md`](./PUSH_NOTIFICATIONS.md).
+
+### `GET /api/v1/public/push-config` (no auth)
+
+The VAPID public key browsers subscribe with. Public by definition — it
+identifies the sender and authorises nothing.
+→ `{ "data": { "publicKey": "B…" | null, "enabled": true } }`
+
+### `GET …/notifications`
+
+Query: `page`, `pageSize`, `unreadOnly` (`"true"`/`"false"`).
+→ `{ "data": [ { id, kind, title, body, url, data, readAt, createdAt } ], "meta": { … }, "unread": 3 }`
+
+`kind` ∈ `ORDER_PLACED | ORDER_STATUS | PAYMENT | STORE | ACCOUNT | ANNOUNCEMENT`.
+`url` is an in-app path the client navigates to on click.
+
+### `GET …/notifications/unread-count`
+→ `{ "data": { "unread": 3, "pushEnabled": true } }` — the bell's badge poll.
+
+### `POST …/notifications/:id/read` · `POST …/notifications/read-all`
+→ `{ "data": { "id", "read": true } }` · `{ "data": { "markedRead": 4 } }`
+Already-read is not an error; a notification belonging to someone else is a 404.
+
+### `POST …/notifications/subscribe`
+
+Body is the browser's `PushSubscription.toJSON()` verbatim:
+```json
+{ "endpoint": "https://fcm.googleapis.com/fcm/send/…",
+  "keys": { "p256dh": "…", "auth": "…" } }
+```
+Keyed on `endpoint`, so re-subscribing is idempotent. An endpoint returning
+under a different principal is **reassigned** (shared computer).
+→ `{ "data": { "id", "subscribed": true, "createdAt" } }`
+
+### `POST …/notifications/unsubscribe`
+Body `{ "endpoint" }`. Scoped to the caller — one account cannot silence
+another's device. → `{ "data": { "subscribed": false } }`
+
+### `GET …/notifications/devices`
+→ `{ "data": [ { id, userAgent, disabledAt, createdAt, lastUsedAt } ] }`
+`disabledAt` = the push service permanently rejected it (404/410).
+
+### `POST /api/v1/admin/notifications/broadcast` 🔒 admin
+
+Rate limited to **5/minute**. Body:
+```json
+{ "audience": "SELLERS", "title": "…", "body": "…", "url": "/stores" }
+```
+`audience` ∈ `ADMINS` (active admins) · `SELLERS` (customers owning ≥1 store)
+· `CUSTOMERS` (every non-blocked customer). Feed rows are written
+transactionally; pushes go out in batches afterwards.
+→ `{ "data": { "recipients": 128 } }`
+
+---
+
+## Platform Admin Console — `/api/v1/admin` 🔒 admin
+
+The Unie Max operator's API, behind `requireAdmin`. **Money is always a
+decimal string** (`"14250.00"`), never a float. Every write appends a row to
+the audit trail.
+
+Fulfilment is deliberately **not** here: the seller owns their orders, so the
+console reports on them rather than driving them.
+
+### `GET /api/v1/admin/dashboard`
+
+Query `days` (1–365, default 30). One request feeds the whole landing page.
+```jsonc
+{ "data": {
+  "range":   { "days": 30, "since": "…" },
+  "totals":  { "stores", "publishedStores", "draftStores", "customers",
+               "sellers", "blockedCustomers", "products", "orders", "revenue" },
+  "today":   { "orders", "revenue" },
+  "orderStatus": { "pending","confirmed","packed","shipped","delivered","cancelled" },
+  "payments":{ "paid","pending","failed","refunded","collected",
+               "codRevenue","onlineRevenue" },
+  "series":  [ { "date": "2026-08-01", "orders": 4, "revenue": "25483.00" } ],
+  "topStores":   [ { id, name, slug, logoUrl, orders, revenue } ],
+  "topProducts": [ { id, name, storeName, storeSlug, unitsSold, revenue } ],
+  "recentOrders":[ … ], "lowStock": [ { id, name, stockTotal, storeName } ],
+  "integrations": { "paymentGateway": true, "push": true }
+} }
+```
+`series` carries **one point per day including empty days**, so a chart can't
+misread the trend.
+
+### `GET /api/v1/admin/stores`
+
+Query: `q` (name / slug / owner email), `status` (`PUBLISHED` · `DRAFT` ·
+`SUSPENDED` — suspension outranks the publish flag, so the filters never
+overlap), `sort` (`NEWEST` · `OLDEST` · `NAME` · `ORDERS`), `page`, `pageSize`.
+→ rows of `{ id, name, slug, logoUrl, isPublished, publishedAt, suspendedAt,
+suspendedReason, createdAt, owner{…}, counts{products,categories,orders}, revenue }`
+
+### `GET /api/v1/admin/stores/:id`
+
+`:id` accepts an id or a slug. Adds `settings` (resolved payments / shipping /
+checkout — the same effective values the storefront sees), `bankAccounts`
+(**account numbers masked to the last 4**), `orderStatus` counts, `theme`,
+`footer` and the 10 latest orders.
+
+### `PATCH /api/v1/admin/stores/:id/suspend`
+
+Body `{ "suspended": true, "reason"?: "…" }`. Suspension removes the store from
+the storefront, the marketplace and the owner's draft preview, and blocks new
+orders — while leaving the owner's management access intact so they can fix
+the cause. Lifting it restores whatever the owner had chosen. The owner is
+notified. Already in that state → `409`. → the full store.
+
+### `PATCH /api/v1/admin/stores/:id/bank-accounts/:accountId/verification`
+
+Body `{ "status": "VERIFIED" | "FAILED" | "PENDING", "note"?: "…" }` — the
+**MANUAL** half of payout verification (the other being a third-party
+validator). `FAILED` **requires** a note: a failure the seller can't act on is
+worse than no answer. Stamps `verifiedBy` with the acting admin. The seller is
+notified. → the full store.
+
+### `GET /api/v1/admin/customers`
+
+Query: `q` (name / email / phone), `filter` (`SELLERS` · `BUYERS` · `BLOCKED`),
+`page`, `pageSize`. "Seller" is not a separate account type — it is a customer
+owning ≥ 1 store.
+→ rows of `{ id, name, email, phone, avatarUrl, emailVerifiedAt,
+phoneVerifiedAt, blockedAt, blockedReason, createdAt,
+counts{stores,orders,addresses}, isSeller }`
+
+### `GET /api/v1/admin/customers/:id`
+Adds `altPhone`, `stores[]`, `spend { orders, total }` and the 10 latest orders.
+Never selects `passwordHash`.
+
+### `PATCH /api/v1/admin/customers/:id/block`
+
+Body `{ "blocked": true, "reason"?: "…" }`. Blocking does two things: the flag
+stops any future sign-in (checked by **every** strategy in
+`package/auth`) **and every existing session is revoked**, so a browser
+holding a refresh token is cut off — only the current 15-minute access token
+outlives it. Unblocking notifies the customer. Already in that state → `409`.
+→ the customer plus `revokedSessions`.
+
+### `GET /api/v1/admin/orders` · `GET /api/v1/admin/orders/:id`
+
+List query: `q` (order number / customer / phone / store / payment reference),
+`status`, `paymentStatus`, `paymentMethod`, `storeId`, `from`, `to`, `page`,
+`pageSize`. The list also returns **`filteredRevenue`** — the revenue of the
+current filter, so the header answers "what is this slice worth".
+Detail adds the money breakdown, contact + delivery snapshot, lifecycle
+timestamps, `cfOrderId`, the linked customer/store, and items with `imageUrl`.
+
+### `GET /api/v1/admin/payments`
+
+The same order rows through the money lens (there is no separate payments
+table — a payment *is* an order's settlement). Query: `q`, `paymentStatus`,
+`paymentMethod`, `from`, `to`. Also returns **`totals`** — count + amount per
+payment status for the current filter.
+
+### `GET /api/v1/admin/catalog/products` · `GET …/:id`
+
+Namespaced under `/catalog` because `/admin/products` belongs to the original
+single-tenant catalog (`modules/product`); these are the **sellers'** products.
+Query: `q` (product / store name), `storeId`, `status` (`ACTIVE` · `DISABLED` ·
+`LOW_STOCK` ≤ 5 · `OUT_OF_STOCK`), `page`, `pageSize`. Detail adds
+`description`, `variants[]` and the full `media[]`.
+
+### `PATCH /api/v1/admin/catalog/products/:id/visibility`
+
+Body `{ "isActive": false, "reason"?: "…" }` — content moderation. Flips the
+**same `isActive` flag the seller toggles**, so there is one visibility rule
+in the system rather than two that can contradict each other. The seller is
+notified with the reason. Already in that state → `409`.
+
+### `GET /api/v1/admin/audit`
+
+The append-only admin trail, newest first. Query: `action`, `entityType`,
+`entityId`, `page`, `pageSize`.
+→ rows of `{ id, adminId, adminEmail, action, entityType, entityId, meta, ip,
+userAgent, createdAt }`. `adminEmail` is a snapshot, so the trail survives the
+admin account being deleted.
+
+Actions: `store.suspend` · `store.restore` · `customer.block` ·
+`customer.unblock` · `product.hide` · `product.show` ·
+`bankAccount.verified|failed|pending` · `admin.create` · `admin.update` ·
+`admin.passwordReset`.
+
+### Admin accounts — `/api/v1/admin/admins` 🔒 SUPER_ADMIN
+
+| Method | Path | Notes |
+| ------ | ---- | ----- |
+| `GET`  | `/admins` | Active first, then by creation |
+| `POST` | `/admins` | `{ email, password, name?, role }` — password ≥ 12 chars with upper/lower/digit |
+| `PATCH`| `/admins/:id` | `{ name?, role?, isActive? }` — deactivating revokes that admin's sessions |
+| `POST` | `/admins/:id/password` | `{ password }` — revokes every session of that admin |
+
+A non-super admin gets `403`. Two invariants the server enforces: nobody may
+change their own role or deactivate themselves, and the **last active
+SUPER_ADMIN** cannot be demoted or deactivated (`409`).
+
+---
+
 ## Planned Endpoints (not yet implemented)
 
 - Cashfree **refunds** — `POST /pg/orders/{id}/refunds` on seller
@@ -1225,7 +1443,6 @@ Deletes the product. Order history is preserved (order items keep a product snap
 - `GET /api/v1/shipping/quote` — auto shipping calculation (orders currently
   ship free)
 - `GET /api/v1/banners`, `GET /api/v1/store` — home page content
-- `GET /api/v1/admin/dashboard` — admin metrics
 - `POST /api/v1/auth/{web,mobile}/apple` — Apple Sign-In (same shape as Google)
 - OAuth token verification for Google/Apple (email delivery
   via Resend and SMS OTP via Message Central are live with console fallbacks; Google

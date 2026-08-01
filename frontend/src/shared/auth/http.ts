@@ -25,9 +25,27 @@ function readCookie(name: string): string | undefined {
   return match ? decodeURIComponent(match.slice(name.length + 1)) : undefined
 }
 
+/**
+ * CSRF cookie name per auth surface — must match `COOKIE_SURFACES` in
+ * `backend/src/package/auth/core/authCore.config.ts`.
+ *
+ * The admin console and the storefront run on ONE origin, and a browser keys
+ * cookies by `(name, domain, path)` with the port excluded — so a single
+ * shared name meant signing in on one surface evicted the other's session.
+ * Each surface therefore has its own namespace, and the request's own URL
+ * tells us which one it belongs to. Deriving it from the URL (rather than
+ * from a value set at app boot) keeps this correct no matter which app loads
+ * the client, and needs no initialisation order to be respected.
+ */
+const ADMIN_API_PREFIX = '/api/v1/admin'
+
+function csrfCookieName(url: string | undefined): string {
+  return url?.startsWith(ADMIN_API_PREFIX) ? 'um_admin_csrf' : 'csrf_token'
+}
+
 http.interceptors.request.use((config) => {
   if ((config.method ?? 'get').toLowerCase() !== 'get') {
-    const csrf = readCookie('csrf_token')
+    const csrf = readCookie(csrfCookieName(config.url))
     if (csrf) config.headers.set('X-CSRF-Token', csrf)
   }
   return config

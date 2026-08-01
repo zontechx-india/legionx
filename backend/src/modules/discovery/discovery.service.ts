@@ -1,7 +1,10 @@
 import { prisma } from "../../config/prisma.js";
 import { Prisma } from "../../generated/prisma/client.js";
 import { mediaUrl } from "../../package/storage/index.js";
-import { PUBLIC_PRODUCT_VISIBILITY } from "../stores/publicStore.service.js";
+import {
+  PUBLIC_PRODUCT_VISIBILITY,
+  PUBLIC_STORE_VISIBILITY,
+} from "../stores/publicStore.service.js";
 import type { NewProductsQuery, SearchQuery } from "./discovery.schema.js";
 
 /**
@@ -16,8 +19,12 @@ import type { NewProductsQuery, SearchQuery } from "./discovery.schema.js";
  * API contract doesn't change.
  */
 
-/** A store must be published for ANY of its content to be discoverable. */
-const publishedStore = { isPublished: true } satisfies Prisma.StoreWhereInput;
+/**
+ * A store must be published — and not admin-suspended — for ANY of its
+ * content to be discoverable. Re-exported from the storefront so discovery
+ * can never surface what a store page would hide.
+ */
+const publishedStore = PUBLIC_STORE_VISIBILITY;
 
 /**
  * A product is marketplace-discoverable when it is publicly visible, its

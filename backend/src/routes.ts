@@ -19,6 +19,12 @@ import {
   customerOrderRoutes,
 } from "./modules/orders/orders.routes.js";
 import { paymentRoutes } from "./modules/payments/payments.routes.js";
+import { adminConsoleRoutes } from "./modules/admin/admin.routes.js";
+import {
+  adminNotificationRoutes,
+  customerNotificationRoutes,
+  publicPushRoutes,
+} from "./modules/notifications/notifications.routes.js";
 
 /**
  * Central route registrar.
@@ -43,6 +49,10 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       await api.register(addressRoutes, { prefix: "/addresses" });
       // Customer order history (guarded inside the plugin — requireCustomer).
       await api.register(customerOrderRoutes, { prefix: "/orders" });
+      // Notification feed + push subscriptions (guarded — requireCustomer).
+      await api.register(customerNotificationRoutes, { prefix: "/notifications" });
+      // VAPID public key — public by definition (browsers subscribe with it).
+      await api.register(publicPushRoutes, { prefix: "/public" });
       // Public storefront pages by slug (published stores only, no auth).
       await api.register(publicStoreRoutes, { prefix: "/public/stores" });
       // Order placement + confirmation lookup (guest checkout, same prefix).
@@ -76,6 +86,13 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
             guarded.addHook("preHandler", requireAdmin);
             await guarded.register(adminCategoryRoutes, { prefix: "/categories" });
             await guarded.register(adminProductRoutes, { prefix: "/products" });
+            // Notification feed + broadcast for the admin principal.
+            await guarded.register(adminNotificationRoutes, {
+              prefix: "/notifications",
+            });
+            // The platform console (dashboard, stores, customers, orders,
+            // payments, catalog oversight, audit trail, admin accounts).
+            await guarded.register(adminConsoleRoutes);
           });
         },
         { prefix: "/admin" },

@@ -1,16 +1,28 @@
 import { prisma } from "../../config/prisma.js";
 import { publicWebUrl, sendMail } from "../../package/mail/index.js";
+import { notify, notifyAdmins } from "../notifications/notifications.service.js";
 
 /**
- * Order emails — customer confirmation + seller "new order" alert on
- * placement, and customer updates on Confirmed / Shipped / Delivered /
- * Cancelled. All FIRE-AND-FORGET: an email failure must never fail (or slow)
- * the order flow itself, so every entry point catches and logs.
+ * Order notifications — **email + push, from one place**, so a new order
+ * event can never reach one channel and miss the other.
+ *
+ * Covered: customer confirmation + seller "new order" alert on placement, and
+ * customer updates on Confirmed / Shipped / Delivered / Cancelled. All
+ * FIRE-AND-FORGET: a delivery failure must never fail (or slow) the order
+ * flow itself, so every entry point catches and logs.
  *
  * Recipient resolution: the checkout's email field is optional per store, so
  * the customer address falls back to the account's login email; the seller
- * alert goes to the store owner's account email.
+ * alert goes to the store owner's account email. Push instead targets the
+ * PRINCIPAL (customer id / owner id), which needs no address at all — see
+ * `modules/notifications`.
  */
+
+/** The store owner, for both channels — email address and push principal. */
+export interface OrderSeller {
+  id: string;
+  email: string | null;
+}
 
 /** The slice of the shaped order the templates need (structural — the
  *  service's shaped order satisfies it; Decimals stringify in templates). */
@@ -82,8 +94,40 @@ const logFailure = (context: string) => (err: unknown) => {
 export function notifyOrderPlaced(
   order: OrderMailData,
   customerId: string,
-  sellerEmail: string | null,
+  seller: OrderSeller,
 ): void {
+  const sellerEmail = seller.email;
+  const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
+
+  // --- push ---------------------------------------------------------------
+  if (customerId) {
+    notify({
+      principalType: "CUSTOMER",
+      principalId: customerId,
+      kind: "ORDER_PLACED",
+      title: "Order placed",
+      body: `Your order ${order.orderNumber} at ${order.storeName} is confirmed — ${formatTotal(order.total)}.`,
+      url: `/order/${order.storeSlug}/${order.id}`,
+      data: { orderId: order.id },
+    });
+  }
+  notify({
+    principalType: "CUSTOMER",
+    principalId: seller.id,
+    kind: "ORDER_PLACED",
+    title: `New order · ${order.storeName}`,
+    body: `${order.orderNumber} — ${itemCount} item${itemCount === 1 ? "" : "s"}, ${formatTotal(order.total)}. Confirm it to get started.`,
+    url: `/stores/${order.storeSlug}/orders/${order.id}`,
+    data: { orderId: order.id },
+  });
+  notifyAdmins({
+    kind: "ORDER_PLACED",
+    title: "New order on the platform",
+    body: `${order.orderNumber} at ${order.storeName} — ${formatTotal(order.total)}.`,
+    url: `/orders/${order.id}`,
+  });
+
+  // --- email --------------------------------------------------------------
   void (async () => {
     const paymentLine =
       order.paymentMethod === "COD"
@@ -244,6 +288,19 @@ export function notifyOrderStatusChange(
 ): void {
   const copy = STATUS_MAIL[order.status];
   if (!copy) return;
+
+  if (customerId) {
+    notify({
+      principalType: "CUSTOMER",
+      principalId: customerId,
+      kind: "ORDER_STATUS",
+      title: copy.subject(order),
+      body: copy.line(order),
+      url: `/order/${order.storeSlug}/${order.id}`,
+      data: { orderId: order.id, status: order.status },
+    });
+  }
+
   void (async () => {
     const to = await customerAddress(order, customerId);
     if (!to) return;

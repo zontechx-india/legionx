@@ -24,6 +24,13 @@ export { adminAuthRoutes } from "./admin/admin.routes.js"; // admin: password (w
 export { optionalCustomerId, requireAdmin, requireCustomer } from "./guards.js";
 
 /**
+ * Kill every session of a principal. Exported for the platform-admin console,
+ * which must be able to end a blocked account's access immediately rather
+ * than wait for its refresh token to expire.
+ */
+export { revokeAllSessions } from "./core/session.service.js";
+
+/**
  * Registers the plugins the auth package needs. Currently just cookie parsing
  * (web clients authenticate via httpOnly cookies). Call once at app boot.
  */

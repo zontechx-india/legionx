@@ -85,6 +85,25 @@ enum AdminRole {
   ADMIN
 }
 
+/// Who a push subscription / notification belongs to. Mirrors
+/// `AuthSession.principalType` — deliberately a plain string union rather than
+/// a foreign key, so the notification subsystem stays domain-agnostic.
+enum PrincipalType {
+  ADMIN
+  CUSTOMER
+}
+
+/// Notification category — drives the icon/label in the client and lets a
+/// recipient filter their feed. Adding a kind is one enum value.
+enum NotificationKind {
+  ORDER_PLACED
+  ORDER_STATUS
+  PAYMENT
+  STORE
+  ACCOUNT
+  ANNOUNCEMENT
+}
+
 // ---------------------------------------------------------------------------
 // White-label store configuration (single row)
 // Branding / contact / defaults that let one codebase serve any business.
@@ -201,6 +220,13 @@ model Customer {
   avatarUrl String? // usually populated from an OAuth profile picture
   altPhone  String? // secondary contact number, not a login identifier
 
+  /// Set when a platform admin blocks the account. A blocked customer cannot
+  /// sign in (every strategy checks it) and all their sessions are revoked at
+  /// block time, so existing tokens die with the next refresh. Nullable
+  /// timestamp rather than a boolean: "when" is what an audit needs.
+  blockedAt     DateTime?
+  blockedReason String?
+
   oauthAccounts OAuthAccount[]
   orders        Order[]
   stores        Store[]
@@ -285,6 +311,14 @@ model Store {
   /// "New Stores" ranks by real publish time — re-publishing an old store
   /// doesn't bump it back to the top.
   publishedAt DateTime?
+
+  /// Set when a platform admin suspends the store. A suspended store is
+  /// removed from the public storefront and marketplace and refuses new
+  /// orders, while the owner keeps managing it (so they can fix whatever
+  /// caused the suspension). Independent of `isPublished`: lifting a
+  /// suspension restores whatever the owner had chosen.
+  suspendedAt     DateTime?
+  suspendedReason String?
 
   ownerId String
   owner   Customer @relation(fields: [ownerId], references: [id], onDelete: Cascade)
@@ -750,4 +784,100 @@ model AuthSession {
 
   @@index([principalId, principalType])
   @@map("auth_sessions")
+}
+
+// ---------------------------------------------------------------------------
+// Notifications & Web Push
+// ---------------------------------------------------------------------------
+
+/// A browser Web Push subscription (W3C Push API). One row per device/browser
+/// per principal — the same person on a phone and a laptop has two.
+/// `endpoint` is the push service's URL and is globally unique, which is what
+/// makes re-subscribing idempotent: the browser hands back the same endpoint,
+/// so we upsert instead of accumulating dead rows.
+///
+/// Keys are the subscription's own public material (`p256dh`) and auth secret
+/// — required to encrypt a payload for that device. They are NOT credentials
+/// of ours; the sender's identity is the VAPID key pair (see package/push).
+model PushSubscription {
+  id            String        @id @default(cuid())
+  principalId   String
+  principalType PrincipalType
+
+  endpoint String @unique
+  p256dh   String
+  auth     String
+
+  userAgent String?
+
+  /// Set when the push service permanently rejected the endpoint (404/410 —
+  /// the browser dropped the subscription). Kept rather than deleted so a
+  /// device that stops receiving can be explained; excluded from every send.
+  disabledAt DateTime?
+  /// Consecutive transient send failures — reset on success.
+  failureCount Int @default(0)
+
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+
+  @@index([principalId, principalType])
+  @@index([disabledAt])
+  @@map("push_subscriptions")
+}
+
+/// A delivered notification, kept so the recipient has a feed (bell menu)
+/// independent of whether a push actually reached a device. Domain-agnostic
+/// like AuthSession: an opaque principal, never a foreign key.
+///
+/// `url` is an in-app path the client navigates to on click ("/orders/abc").
+/// `data` holds the small payload a client may want without a second fetch.
+model Notification {
+  id            String        @id @default(cuid())
+  principalId   String
+  principalType PrincipalType
+
+  kind  NotificationKind
+  title String
+  body  String
+  url   String?
+  data  Json?
+
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  // The feed query: this principal's rows, newest first.
+  @@index([principalType, principalId, createdAt])
+  @@index([principalType, principalId, readAt])
+  @@map("notifications")
+}
+
+// ---------------------------------------------------------------------------
+// Admin audit trail
+// ---------------------------------------------------------------------------
+
+/// An append-only record of every state-changing action a platform admin
+/// takes (suspend a store, block a customer, verify a payout account…).
+/// Write-once by design — nothing in the app updates or deletes a row — so it
+/// stays trustworthy for incident review. `meta` carries the action's own
+/// details (previous value, reason, affected counts).
+model AdminAuditLog {
+  id      String  @id @default(cuid())
+  adminId String
+  /// Snapshot of the actor's email — an admin can be deleted, the trail can't.
+  adminEmail String
+
+  /// Dotted action name, e.g. "store.suspend" / "customer.block".
+  action     String
+  entityType String
+  entityId   String
+  meta       Json?
+
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([adminId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("admin_audit_logs")
 }

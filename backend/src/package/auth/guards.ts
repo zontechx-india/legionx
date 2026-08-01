@@ -31,7 +31,7 @@ export function optionalCustomerId(
   request: FastifyRequest,
 ): string | undefined {
   try {
-    const principal = authenticate(request);
+    const principal = authenticate(request, "customer");
     return principal.type === "customer" ? principal.id : undefined;
   } catch {
     return undefined;

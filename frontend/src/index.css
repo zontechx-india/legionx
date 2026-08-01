@@ -84,6 +84,11 @@
   --color-warning: var(--warning);
   --color-danger: var(--danger);
   --color-info: var(--info);
+
+  /* Chart series — see the palette block below. */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-grid: var(--chart-grid);
 }
 
 /* ------------------------------------------------------------------ *
@@ -136,6 +141,23 @@
   --info: #0000ee;
   --overlay: rgba(0, 0, 0, 0.6);
 
+  /* Chart series (admin dashboard).
+   *
+   * The brand gold (#f5b400) is a FILL color, not a mark color: on a white
+   * chart surface it sits at 1.79:1 contrast and outside the readable
+   * lightness band, so a 2px line drawn in it disappears. These are the
+   * nearest steps of the same two hues that pass the categorical checks —
+   * lightness band, chroma floor, colorblind separation (ΔE 34 normal /
+   * 30 protan) and 3:1 against the surface — verified with the dataviz
+   * skill's validator for BOTH schemes. Dark mode gets its own steps
+   * (below), never an automatic flip of these.
+   *
+   * Assignment is by ENTITY, fixed: chart-1 = money/revenue,
+   * chart-2 = counts/orders. A filter never repaints a series. */
+  --chart-1: #b07a00;
+  --chart-2: #1863dc;
+  --chart-grid: #ececec;
+
   color-scheme: light;
 }
 
@@ -150,6 +172,12 @@
   --line: #2a2a2a;
   --fg: #f8f8f8;
   --fg-muted: #9a9a9a;
+
+  /* Dark chart steps — SELECTED against the #1e1e1e card surface and
+   * validated there, not derived from the light values. */
+  --chart-1: #b88500;
+  --chart-2: #4b84e0;
+  --chart-grid: #2f2f2f;
 
   color-scheme: dark;
 }

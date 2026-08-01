@@ -93,8 +93,49 @@ LINK A PHONE (enables OTP login)
 
 SESSIONS (per surface: /auth and /admin/auth)
   POST /{web,mobile}/refresh · /logout · /logout-all
-  web refresh needs X-CSRF-Token = csrf_token cookie (double-submit)
+  web refresh needs X-CSRF-Token = that surface's CSRF cookie (double-submit)
 ```
+
+### Cookie surfaces — why names are per-principal
+
+The storefront and the admin console are two apps on **one origin**, and a
+browser keys cookies by `(name, domain, path)` — **the port is not part of that
+key**. A single shared set of names meant the second login evicted the first:
+the evicted app then sent the wrong principal's token (403), its refresh tried
+to rotate a token of the wrong kind and failed, and `/web/logout` revoked
+whichever session happened to own the cookie.
+
+Each principal kind therefore owns a **cookie surface**
+(`authConfig.cookieSurface(type)` → `COOKIE_SURFACES` in `authCore.config.ts`):
+
+| Principal | Access | Refresh | CSRF | Token path |
+| --------- | ------ | ------- | ---- | ---------- |
+| customer  | `access_token` | `refresh_token` | `csrf_token` | `/` |
+| admin     | `um_admin_access` | `um_admin_refresh` | `um_admin_csrf` | `/api/v1/admin` |
+
+Three properties fall out of this:
+
+- **Both sessions coexist**, which is the normal case for staff who also sell
+  or shop on the platform.
+- **Admin tokens are never transmitted with a storefront request** — the
+  `tokenPath` keeps them off every path outside the admin subtree.
+- **Logout is surface-local**: `clearAuthCookies(reply, type)` and
+  `readRefreshCookie(request, type)` only ever touch their own namespace.
+
+Every cookie function in `core/cookies.ts` **requires the principal type as an
+argument**, so this is enforced by the compiler rather than by convention —
+there is no way to read, write or clear an auth cookie without saying whose it
+is. `requireCsrf(type)` is likewise a factory bound to one surface, so a page
+holding some other surface's CSRF token cannot satisfy the check.
+
+The CSRF cookie stays at path `/` for both surfaces: it must be readable by JS
+(double-submit), and a document served from `/admin` cannot read a cookie
+scoped to `/api/v1/admin`. Isolating it by **name** is enough — it is not a
+credential, and its protection comes from an attacker being unable to read it
+cross-origin.
+
+Adding a third principal kind is one entry in `COOKIE_SURFACES`; nothing else
+in the package needs to know it exists.
 
 Every login strategy resolves to the same `CustomerAuthResult { principal,
 customer, isNewUser }`; the controller then does `issueSession(principal)` and
@@ -111,10 +152,11 @@ package/auth/
 │   ├── config/env.ts         #   package-own env (JWT, cookies, codes, Resend, OAuth ids)
 │   ├── config/prisma.ts      #   the single DB seam (re-exports the app's client)
 │   ├── authCore.types.ts     #   Principal, IssuedTokens, SessionMeta
-│   ├── authCore.config.ts    #   TTLs + cookie config
+│   ├── authCore.config.ts    #   TTLs + COOKIE SURFACES (names/path per principal)
 │   ├── token.util.ts         #   access JWT sign/verify + opaque refresh tokens
 │   ├── session.service.ts    #   DB-backed rotating sessions + theft detection
 │   ├── cookies.ts            #   web cookie delivery + double-submit CSRF
+│   │                         #     (every fn takes the principal type)
 │   ├── delivery.ts           #   web (cookies) vs mobile (JSON body) shaping
 │   ├── guard.ts              #   bearer-or-cookie requirePrincipal()
 │   └── session.routes.ts     #   generic refresh/logout/logout-all per surface

@@ -33,7 +33,9 @@ Media uploads via
 **production refuses the local driver** — object storage only).
 Transactional email via the tiny **`package/mail`** (Resend REST, console
 fallback without a key; `PUBLIC_WEB_URL` adds deep links) — used by the
-order notifications. Online payments via **Cashfree PG v4**
+order notifications. Browser **Web Push** via **`package/push`** (`web-push`
+library, VAPID; console fallback without keys — see
+`docs/PUSH_NOTIFICATIONS.md`). Online payments via **Cashfree PG v4**
 (`modules/payments` — REST wrapper, no SDK; see
 `docs/CASHFREE_PAYMENTS.md`). Planned (hooks already in place): Socket.IO
 (real-time), Google/Apple token verification, Cashfree refunds.
@@ -67,6 +69,11 @@ backend/
 │   │   │   └── drivers/       #   s3.ts (AWS) · local.ts (dev, served at /uploads)
 │   │   ├── mail/              # Transactional email (Resend REST / console
 │   │   │                      #   fallback) — order notifications use it
+│   │   ├── push/              # Web Push (VAPID) — see "Push notifications"
+│   │   │   ├── index.ts       #   facade: `push` sender + publicKey/configured
+│   │   │   ├── config.ts      #   own env parsing (VAPID_*, PUSH_TTL_SECONDS)
+│   │   │   ├── types.ts       #   PushSender port (send → sent/expired/failed)
+│   │   │   └── drivers/       #   webPush.ts (real) · console.ts (no keys)
 │   │   └── auth/              # The whole auth system — see "Authentication" below
 │   │       ├── index.ts       #   PUBLIC facade — the ONLY entry the app imports
 │   │       ├── guards.ts      #   requireAdmin / requireCustomer + request types
@@ -94,6 +101,14 @@ backend/
 │   │   │                      #   (GET /orders) + seller dashboard
 │   │   │                      #   (GET /stores/:id/dashboard)
 │   │   ├── discovery/         # marketplace: global search + platform stats
+│   │   ├── notifications/     # feed + push subscriptions (one handler set,
+│   │   │                      #   guard picks the principal) + notify()/
+│   │   │                      #   notifyAdmins() dispatch + admin broadcast
+│   │   ├── admin/             # PLATFORM CONSOLE (all behind requireAdmin):
+│   │   │                      #   admin.schema.ts (every query/body) ·
+│   │   │                      #   admin.controller.ts (thin, audits writes) ·
+│   │   │                      #   adminDashboard/Stores/Customers/Orders/
+│   │   │                      #   Products/Accounts.service.ts · adminAudit.ts
 │   │   ├── payments/          # Cashfree gateway: cashfree.client.ts (PG v4
 │   │   │                      #   REST wrapper) + session create/retry +
 │   │   │                      #   HMAC-verified webhook + reconcile fallback
@@ -102,6 +117,7 @@ backend/
 │   │   └── (shipping, inventory, settings, dashboard — planned)
 │   ├── scripts/
 │   │   ├── createAdmin.ts     # Bootstrap an admin (npm run create-admin)
+│   │   ├── generatePushKeys.ts# VAPID key pair (npm run push-keys)
 │   │   └── backfillCatalog.ts # Slugs + price aggregates (npm run backfill-catalog)
 │   ├── utils/                 # response, slug, httpError, zodHelpers, logger, password
 │   └── generated/prisma/      # Prisma client (generated, git-ignored)
@@ -213,6 +229,77 @@ server enforces. Keys are never reused (a replace mints a new key), which
 makes objects immutable and infinitely cacheable. The package parses its own
 env (`config.ts`) — see Environment below.
 
+### Push notifications — `package/push` + `modules/notifications`
+
+> Full reference: [`PUSH_NOTIFICATIONS.md`](./PUSH_NOTIFICATIONS.md).
+
+Two layers, deliberately split the same way storage and mail are:
+
+- **`package/push`** is domain-free. Its boundary is the `PushSender` port
+  (`send(target, payload) → sent | expired | failed`), it parses its own env
+  (`VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` /
+  `PUSH_TTL_SECONDS`), and it knows an endpoint and a payload — never a
+  customer, an order or the database. Real delivery uses the `web-push`
+  library (RFC 8291 encryption + RFC 8292 VAPID); **without both keys a
+  console driver logs instead**, so development works end to end and nothing
+  is silently dropped. Swapping in FCM/APNs later is one new driver.
+- **`modules/notifications`** owns the domain: it stores subscriptions, writes
+  the feed, and decides who gets what.
+
+**The feed is the source of truth, push is best effort.** `notify()` writes a
+`Notification` row first, then fans out to that principal's live
+subscriptions; it is fire-and-forget and never throws, so a push-service
+outage cannot fail (or slow) an order. `notifyAdmins()` is the same for every
+active admin.
+
+Subscriptions are keyed on the browser's `endpoint`, which makes
+re-subscribing idempotent; an endpoint returning under a **different
+principal** (shared computer) is reassigned rather than left pushing one
+person's orders to another person's screen. A `404`/`410` from the push
+service retires the row (`disabledAt`) instead of deleting it, and five
+consecutive transient failures do the same — a returning endpoint clears both.
+
+Order events fire from `modules/orders/orders.notifications.ts`, **the same
+function that sends the email**, so a channel can't be added to one and
+forgotten on the other.
+
+### The platform admin console — `modules/admin`
+
+Mounted inside the `requireAdmin` subtree in `routes.ts`, so no route in the
+module repeats the guard. Deliberate scope decisions:
+
+- **Read-heavy.** The seller owns fulfilment (they hold the stock and the
+  customer relationship), so the console reports on orders rather than driving
+  them. The only writes are moderation levers and admin-account management.
+- **Store suspension** (`Store.suspendedAt`) is a separate axis from the
+  owner's `isPublished`. Suspension outranks it in every public query
+  (`PUBLIC_STORE_VISIBILITY` in `publicStore.service.ts`, reused by
+  `modules/discovery` and by order placement) and hides the store even from
+  its owner's draft preview — but leaves management access intact so they can
+  fix the cause. Lifting it restores exactly what the owner had chosen.
+- **Customer blocking** (`Customer.blockedAt`) sets the flag *and* revokes
+  every session. The sign-in check lives in `customer.shared.ts#authResult()`
+  — the single function every strategy funnels through to build a
+  `CustomerAuthResult` — so a new strategy cannot forget it.
+- **Product moderation** flips the very same `isActive` flag the seller
+  toggles: one visibility rule in the system, never two that can contradict.
+- **Payout verification** is the `MANUAL` half of the `BankVerificationMethod`
+  the schema already provisioned; `FAILED` requires a note, and `verifiedBy`
+  records who decided, because money settles to that account.
+- **Every write appends an `AdminAuditLog` row** via `recordAudit(request, …)`
+  — fire-and-forget, so an audit failure never fails the action it describes,
+  and carrying a snapshot of the actor's email so the trail survives the admin
+  being deleted.
+
+`admin.schema.ts` keeps every request shape in one file (unlike the per-area
+split in `modules/stores`) because admin input is almost entirely list
+filters, which read better side by side.
+
+Endpoint naming note: the console's catalog lives under
+`/api/v1/admin/catalog/products` because `/admin/products` is already the
+original single-tenant catalog (`modules/product`) — these are the *sellers'*
+products, a different thing.
+
 ### Authentication — the `package/auth` sub-system
 
 > Full architecture reference:
@@ -226,7 +313,16 @@ extracted into a standalone service later with minimal churn. The rest of the ap
 
 - **`core/`** — the generic, domain-free **engine**: access JWT + opaque rotating refresh
   tokens (`AuthSession`-backed, reuse ⇒ all sessions revoked), web-cookie + CSRF and
-  mobile-bearer delivery, `requirePrincipal` guard, generic refresh/logout routes. Knows
+  mobile-bearer delivery, `requirePrincipal` guard, generic refresh/logout routes.
+  Web cookies are namespaced into a **cookie surface per principal**
+  (`authConfig.cookieSurface`): customer keeps `access_token`/`refresh_token`/
+  `csrf_token` at `/`, admin uses `um_admin_*` with its tokens path-scoped to
+  `/api/v1/admin`. The storefront and the console share one origin, and a
+  browser keys cookies by `(name, domain, path)` with the **port excluded** —
+  a shared namespace meant signing in on one surface evicted the other's
+  session and a logout revoked whichever session owned the cookie. Every
+  function in `core/cookies.ts` takes the principal type, so the isolation is
+  compiler-enforced rather than a convention. Knows
   only a **principal** (`{ id, type, role? }`) — never a credential or domain table. Owns
   its own env parsing (`core/config/env.ts` — JWT, cookie, OTP, OAuth vars; the app's
   `config/env` carries none of them) and the single DB seam (`core/config/prisma.ts`).
@@ -485,10 +581,37 @@ White-label design — one codebase, any business:
 - **AuthSession** — refresh-token session for `package/auth/core`. Domain-agnostic on purpose:
   opaque `principalId` + `principalType` (no FK), `refreshHash` (sha256, unique), `role`
   snapshot, `expiresAt`, `revokedAt`, `replacedById` (rotation chain), `userAgent`/`ip`.
+- **PushSubscription** — one browser's Web Push registration.
+  Domain-agnostic like `AuthSession`: opaque `principalId` +
+  `principalType` (`ADMIN`/`CUSTOMER`), never a FK. `endpoint` is **unique** —
+  the browser keeps it stable, which is what makes re-subscribing idempotent
+  — plus the device's own `p256dh`/`auth` keys (they encrypt the payload, so
+  the push service can't read it). `disabledAt` retires an endpoint the push
+  service permanently rejected (404/410) or that failed `failureCount` ≥ 5
+  times in a row; a returning endpoint clears both.
+- **Notification** — the delivered-notification feed, so a recipient has a
+  bell menu independent of whether a push reached a device. Same opaque
+  principal. `kind` (`ORDER_PLACED`/`ORDER_STATUS`/`PAYMENT`/`STORE`/
+  `ACCOUNT`/`ANNOUNCEMENT`), `title`, `body`, optional in-app `url` and `data`
+  JSON, `readAt`. Indexed for the two queries that exist: the feed and the
+  unread count.
+- **AdminAuditLog** — append-only record of every state-changing admin
+  action. Nothing in the app updates or deletes a row, which is what keeps it
+  trustworthy for an incident review. Holds `adminId` **plus a snapshot of
+  `adminEmail`** (the trail outlives the account), a dotted `action`
+  (`store.suspend`, `customer.block`…), `entityType`/`entityId`, free-form
+  `meta` (previous value, reason, affected counts), `ip` and `userAgent`.
+- **Store** additions: `suspendedAt` / `suspendedReason` — the admin
+  moderation switch, independent of the owner's `isPublished` (see "The
+  platform admin console").
+- **Customer** additions: `blockedAt` / `blockedReason` — set when an admin
+  blocks the account; every sign-in strategy checks it and blocking revokes
+  all sessions.
 
 Enums: `ProductStatus`, `OrderStatus`, `PaymentMethod`, `PaymentStatus`, `ShippingType`,
 `OtpChannel`, `OtpPurpose`, `AuthProvider`, `AdminRole`, `StoreMediaType`,
-`BankVerificationStatus`, `BankVerificationMethod`.
+`BankVerificationStatus`, `BankVerificationMethod`, `PrincipalType`,
+`NotificationKind`.
 
 ---
 
@@ -524,6 +647,7 @@ Enums: `ProductStatus`, `OrderStatus`, `PaymentMethod`, `PaymentStatus`, `Shippi
 | `npm run db:deploy` | Apply pending migrations (production deploys)      |
 | `npm run db:status` | Show applied/pending migrations                    |
 | `npm run create-admin -- <email> <pw> [name]` | Bootstrap/reset an admin account |
+| `npm run push-keys` | Generate a VAPID key pair for Web Push (run once per environment) |
 | `npm run backfill-catalog` | Fill missing category/product slugs, recompute price aggregates, stamp `publishedAt` on pre-column published stores (idempotent) |
 | `npx prisma generate` | Regenerate client after schema edits            |
 | `npx prisma db push`  | Sync schema to the database                     |
@@ -536,6 +660,12 @@ Key env vars. App-level (`config/env.ts`): `DATABASE_URL`, `DIRECT_URL`, `CORS_O
 `docs/CASHFREE_PAYMENTS.md`. Mail-level
 (`package/mail/index.ts`): reuses `RESEND_API_KEY`/`EMAIL_FROM`, plus optional
 `PUBLIC_WEB_URL` (storefront origin for deep links in order emails).
+Push-level, parsed by `package/push/config.ts`: `VAPID_PUBLIC_KEY` /
+`VAPID_PRIVATE_KEY` (both required for real delivery — without them a console
+driver logs instead), optional `VAPID_SUBJECT` (contact URL/mailto) and
+`PUSH_TTL_SECONDS` (86400). Generate the pair with `npm run push-keys`;
+rotating it invalidates every existing browser subscription — see
+`docs/PUSH_NOTIFICATIONS.md`.
 **Production fail-fast guards** — with `NODE_ENV=production` the server
 refuses to boot when: `DATABASE_URL`/`DIRECT_URL` missing, `CORS_ORIGIN="*"`,
 `OTP_BYPASS=true`, `AUTH_COOKIE_SECURE=false`, `JWT_SECRET` shorter than 32
@@ -606,13 +736,31 @@ placement (customer confirmation + seller alert) and on Confirmed /
 Shipped / Delivered / Cancelled (customer) — a mail failure never fails
 the order flow.
 
+Also done: the **platform admin console** (`modules/admin`, behind
+`requireAdmin`) — one-request dashboard (totals, today, per-day series, order
+pipeline, payment split, top stores/products, low stock, integration health),
+store + seller oversight with **suspension**, customer oversight with
+**blocking** (revokes every session), platform-wide order and payment views,
+seller-catalog oversight with a **hide/restore** moderation switch, **manual
+payout-account verification**, an append-only **audit trail** of every admin
+write, and SUPER_ADMIN-only **admin-account management** (create / role /
+deactivate / password reset, each revoking that admin's sessions). Verified
+end to end against the live database.
+
+Also done: **notifications + Web Push** — `package/push` (VAPID, `web-push`,
+console fallback) under `modules/notifications` (feed, per-device
+subscriptions, `notify()`/`notifyAdmins()` dispatch, admin broadcast).
+Order placement and every status change now fire email **and** push from the
+same function; store suspension, product moderation and payout verification
+notify the seller. Full reference: `docs/PUSH_NOTIFICATIONS.md`.
+
 **Not yet (hooks in place):**
 1. **Cashfree refunds** — cancelling a paid order marks REFUNDED (status
    only); the actual refund API call is manual (Cashfree dashboard) until
    wired. Also: automatic expiry/cancel sweep for abandoned unpaid ONLINE
    orders (they hold stock until the seller cancels).
 2. Shipping-charge calculation (orders currently ship free), Inventory
-   alerts, Banners, platform-admin dashboard.
+   alerts, Banners.
 3. OAuth verification: Google (verifier currently unregistered — endpoints return 400)
    and Apple Sign-In. Email (Resend) + SMS (Message Central) delivery are DONE;
    adapters slot into `package/auth/providers/` — see

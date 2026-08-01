@@ -7,8 +7,7 @@ import {
 } from "../../verification/verification.service.js";
 import {
   customerAuthSelect,
-  toPublicCustomer,
-  customerPrincipal,
+  authResult,
 } from "../customer.shared.js";
 import type { CustomerAuthResult } from "../customer.shared.js";
 import type { OtpRequestInput, OtpVerifyInput } from "../customer.schema.js";
@@ -67,9 +66,5 @@ export async function verifyLoginCode(
     select: customerAuthSelect,
   });
 
-  return {
-    principal: customerPrincipal(customer.id),
-    customer: toPublicCustomer(customer),
-    isNewUser: false,
-  };
+  return authResult(customer);
 }

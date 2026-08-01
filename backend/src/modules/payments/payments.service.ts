@@ -220,17 +220,19 @@ async function markOrderPaid(
       total: true,
       paymentMethod: true,
       items: { select: { productName: true, quantity: true } },
-      store: { select: { owner: { select: { email: true } } } },
+      store: { select: { owner: { select: { id: true, email: true } } } },
     },
   });
   if (!order) return;
 
-  const sellerEmail = order.store?.owner.email ?? null;
+  const seller = order.store?.owner ?? null;
   if (order.status === "CANCELLED") {
-    notifyPaymentOnCancelledOrder(order, order.customerId, sellerEmail);
+    notifyPaymentOnCancelledOrder(order, order.customerId, seller?.email ?? null);
     return;
   }
-  notifyOrderPlaced(order, order.customerId ?? "", sellerEmail);
+  // The store is gone (SetNull) only if it was deleted mid-payment — there is
+  // no seller left to alert, but the customer still gets their confirmation.
+  if (seller) notifyOrderPlaced(order, order.customerId ?? "", seller);
 }
 
 /**

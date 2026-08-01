@@ -8,21 +8,32 @@ import type { PrincipalType } from "./authCore.types.js";
 /**
  * Access-token authentication that works for **both** client profiles:
  *   - mobile → `Authorization: Bearer <access>`
- *   - web    → httpOnly `access_token` cookie
+ *   - web    → the surface's own httpOnly access cookie
+ *
+ * The `type` argument selects which surface's cookie to read. A bearer token
+ * needs no such hint (the JWT carries its own principal type, and
+ * `verifyAccessToken` + the caller's check enforce it), so the header path
+ * stays type-agnostic.
  */
 
 /** Pulls the access token from the Authorization header or the cookie. */
-export function extractAccessToken(request: FastifyRequest): string | undefined {
+export function extractAccessToken(
+  request: FastifyRequest,
+  type: PrincipalType,
+): string | undefined {
   const header = request.headers.authorization;
   if (header?.startsWith("Bearer ")) {
     return header.slice("Bearer ".length).trim();
   }
-  return readAccessCookie(request);
+  return readAccessCookie(request, type);
 }
 
 /** Verifies the request and returns the principal, or throws 401. */
-export function authenticate(request: FastifyRequest): AuthenticatedPrincipal {
-  const token = extractAccessToken(request);
+export function authenticate(
+  request: FastifyRequest,
+  type: PrincipalType,
+): AuthenticatedPrincipal {
+  const token = extractAccessToken(request, type);
   if (!token) throw HttpError.unauthorized("Authentication required");
   return verifyAccessToken(token);
 }
@@ -33,7 +44,7 @@ export function authenticate(request: FastifyRequest): AuthenticatedPrincipal {
  */
 export function requirePrincipal(type: PrincipalType) {
   return async function guard(request: FastifyRequest): Promise<void> {
-    const principal = authenticate(request);
+    const principal = authenticate(request, type);
     if (principal.type !== type) {
       throw HttpError.forbidden(`${type} access required`);
     }

@@ -166,9 +166,9 @@ export function AccountMenu() {
 
       <ConfirmDialog
         open={signOutFlow.confirming}
-        title="Sign out?"
+        title="Logout?"
         description="You'll need to sign in again to access your account."
-        confirmLabel="Sign out"
+        confirmLabel="Logout"
         busy={signOutFlow.busy}
         onConfirm={signOutFlow.confirm}
         onCancel={signOutFlow.cancel}

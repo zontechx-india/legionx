@@ -4,6 +4,7 @@ import { useCartRevalidation } from '../../features/cart/useCartRevalidation'
 import { storeVars } from '../../features/publicStore/storeTheme'
 import { useStoreShell } from '../../features/publicStore/useStoreShells'
 import { cartUrl, formatPrice, storeHomeUrl } from '../../features/stores/storesApi'
+import { useGoBack } from '../../../shared/useGoBack'
 import { usePageTitle } from '../../../shared/usePageTitle'
 import {
   ArrowLeftIcon,
@@ -33,6 +34,7 @@ export function CartStorePage({ storeSlug }: { storeSlug: string }) {
   const shell = useStoreShell(storeSlug)
   const group = groupByStore(items).find((g) => g.storeSlug === storeSlug)
   usePageTitle('Cart', group?.storeName)
+  const goBack = useGoBack(cartUrl(storeSlug))
 
   return (
     <div
@@ -41,14 +43,18 @@ export function CartStorePage({ storeSlug }: { storeSlug: string }) {
     >
       <header className="sticky top-0 z-40 border-b border-line bg-bg">
         <div className="mx-auto flex max-w-[1920px] items-center gap-3 px-4 py-3 sm:px-6 lg:px-10">
-          <Link
-            // Keep this store's theme when going back to the combined cart.
-            to={cartUrl(storeSlug)}
-            aria-label="Back to cart"
+          {/* Steps BACK (see useGoBack). As a Link this pushed a second
+              /cart entry with this page still ahead of it, so Back bounced
+              between the two. Direct opens fall back to the combined cart,
+              keeping this store's theme. */}
+          <button
+            type="button"
+            onClick={goBack}
+            aria-label="Go back"
             className="flex h-10 w-10 items-center justify-center rounded-full text-muted transition hover:bg-surface-alt"
           >
             <ArrowLeftIcon className="h-5 w-5" />
-          </Link>
+          </button>
           <span className="flex items-center gap-2 font-heading text-lg font-semibold">
             <CartIcon className="h-5 w-5" />
             Cart
@@ -154,8 +160,11 @@ function NothingFromStore({ storeSlug }: { storeSlug: string }) {
       <p className="mt-1.5 max-w-sm text-sm text-muted">
         Your cart has no items from this store (they may have been removed).
       </p>
+      {/* `replace`: nothing from this store is left, so this page shouldn't
+          remain in history as a Back target. */}
       <Link
         to={cartUrl(storeSlug)}
+        replace
         className="metal-cta mt-5 rounded-md px-5 py-2.5 text-sm font-semibold text-cta-contrast transition"
       >
         Back to cart

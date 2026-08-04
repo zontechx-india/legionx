@@ -177,6 +177,20 @@ export const cart = {
   },
 
   /**
+   * Empty the whole cart across every store.
+   *
+   * Called on **explicit logout** (`StorefrontApp`): the cart is device-local,
+   * so without this the next person to use the browser inherits the previous
+   * customer's basket. Deliberately NOT called when a session merely expires
+   * — a 401 mid-checkout bounces to `/login` and the shopper must get their
+   * cart back after signing in again.
+   */
+  clear() {
+    if (items.length === 0) return // don't notify subscribers for a no-op
+    commit([])
+  },
+
+  /**
    * Apply fresh price/stock (from the API) to matching lines — the cart-open
    * revalidation. Quantities are clamped down to the new stock (an
    * out-of-stock line keeps its qty so it stays visible with a warning rather

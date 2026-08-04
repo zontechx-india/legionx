@@ -222,9 +222,17 @@ Signed-in account pages mount inside `RequireCustomer` → `AppLayout`
   Items come from `ACCOUNT_MENU_ITEMS` in `app/navigation.ts` (My Profile,
   Orders, Saved Addresses) plus the dynamic store row and a Logout row using
   the shared confirm flow (`layout/useSignOutConfirm.ts`); Logout always
-  goes through `shared/ui/ConfirmDialog.tsx` — only on confirm is the
-  session revoked server-side. The trigger's name is single-line and
-  truncates past `max-w-36`.
+  goes through `shared/ui/ConfirmDialog.tsx` ("Logout?" / Logout, matching
+  the menu row's wording) — only on confirm is the session revoked
+  server-side, and **confirming navigates to `/` (replace) before revoking**:
+  flipping to guest while a guarded route is still mounted would let
+  `RequireCustomer` redirect to `/login?next=…`, so logging out of
+  `/stores/{slug}` landed on the login page and signing back in returned to
+  the page just left. Logout ends on the marketplace homepage from every
+  screen. The trigger's name is single-line and truncates past
+  `max-w-36`. The same menu is reused by the marketplace header, whose
+  sticky bar carries `backdrop-blur` — which is why the dialog portals to
+  `<body>` (see below).
 - **Session context** (`app/sessionContext.ts` + `app/SessionProvider.tsx`) —
   provides `{ customer, signOut }` to the authed tree via
   `useCustomerSession()`; no prop drilling.
@@ -552,6 +560,12 @@ lines and changed covers heal themselves). Cart rows show the variant as
 a chip. Adding to cart from the product page pops a short **"Added to cart —
 View cart" toast** (`AddedToast` in `CartControls.tsx`); quantity changes on
 the cart pages stay silent.
+**Logging out empties the cart** (`cart.clear()`, wired into the storefront's
+`signOut` in `StorefrontApp.tsx`): there is no server-side cart, so a
+device-local basket would otherwise be inherited by whoever uses the browser
+next. Only an *explicit* logout clears it — an expired session (the 401 path
+out of checkout) redirects to `/login` and leaves the cart intact, so the
+shopper can sign back in and pay.
 Three public routes, matched before the session gate like `/store/{slug}`:
 **`/cart`** (`pages/cart/CartPage.tsx`) groups items **by store** — each
 store card shows the store's **logo** (fetched via
@@ -562,6 +576,19 @@ store card shows the store's **logo** (fetched via
 first 3 lines, with a "View N more items" link to
 **`/cart/{storeSlug}`** (`pages/cart/CartStorePage.tsx`), the dedicated
 all-items page for that store (plus Clear all and its own Place Order).
+**Store-scoped view:** `?from={slug}` scopes the **contents**, not just the
+palette. Opened from a store, `/cart` shows that store's group **alone** —
+the visitor is mid-shop there, orders are placed per store, and a summary
+total spanning other stores would overstate what they're about to buy. A
+full-width **"Show all cart items — N more from M other stores"** button
+below the list (and a matching link in the summary) reveals the rest,
+keeping the from-store first and labelling the boundary "Other stores in
+your cart"; the button then flips to "Show only {store}". The order summary
+always totals **what is on screen**. Opened from the marketplace (plain
+`/cart`) every store is listed, as before. A `?from=` store with nothing in
+the cart falls back to the full list — there is nothing to scope to. The
+store header's cart badge counts **that store's** items for the same reason
+(the marketplace header still counts everything).
 **Theming rule:** the cart continues the theme of the store the customer
 **opened it from**, carried **explicitly in the URL**: every cart link
 inside a store points at `/cart?from={storeSlug}` (built by `cartUrl()` in
@@ -630,6 +657,16 @@ Continue shopping). ONLINE payment is simulated in development; production
 answers 503 until the gateway lands, surfaced as the Place Order error.
 The `/order/...` prefix is part of `StorefrontApp`'s anonymous
 `PUBLIC_PATH`, so a guest can reopen their confirmation link.
+
+**Back controls step back, they don't re-navigate.** The checkout and
+per-store cart back arrows use `shared/useGoBack.ts` (`navigate(-1)` when
+React Router's `history.state.idx > 0`, else a `replace` to the given
+fallback), and the dead-end "Back to cart" CTAs pass `replace`. Written as
+plain `<Link to={cart}>` they PUSHED a second cart entry with checkout still
+ahead of it, so Back bounced cart → checkout → cart forever. `/cart`'s own
+arrow deliberately keeps `window.history.back()`: the store header reaches
+it with a full page load (`<a href>`), which resets `idx` to 0 even though
+the store is one browser step back.
 
 Every public page sets a **per-route `document.title`** via
 `shared/usePageTitle.ts` — "Product · Store · Unie Max", "Search "q" ·
@@ -740,7 +777,8 @@ for crawlers wait for SSR/prerender).
   (**gated**: with zero categories it shows an "Add a category first"
   state linking to the Categories section — the category-first sequence;
   otherwise an Add Product form — name, category select grouped by root
-  with "Root › Sub" options, optional description, and a **"This product
+  with "Root › Sub" options, optional description, an optional **photo
+  picker** (`NewProductPhotos.tsx`) and a **"This product
   has variants" checkbox** that picks the product shape. Unchecked (the
   default) shows required Price + Stock; checked hides them and shows a
   **variants editor** instead (rows of name / price / stock, each required,
@@ -748,7 +786,17 @@ for crawlers wait for SSR/prerender).
   variant is the unit of sale** the two are mutually exclusive — there is
   never a second competing price — and the checkbox only *hides* fields, so
   toggling back and forth preserves whatever was typed. The submitted
-  payload carries `hasVariants` plus exactly one side's fields. The product
+  payload carries `hasVariants` plus exactly one side's fields.
+  **Photos at add time** (`NewProductPhotos.tsx`): media uploads need a
+  product id (`POST …/products/:productId/media`), so up to 8 images are
+  validated, cropped 1:1 and held as blobs **locally**, then uploaded one at
+  a time straight after `createProduct` — the deferred-upload shape
+  `CreateStorePage` uses for a new store's logo. The button counts them
+  ("Uploading photo 2 of 3…"). The picker offers pick/drop, remove and Make
+  cover only; full reordering, alt text and the video stay in the row's
+  Photos & video panel, which owns real media rows. A failed upload never
+  strands the flow — the product row still appears and the page shows which
+  photos to re-add. The product
   list shows "Root › Sub" paths, total stock and a price **range** when
   options differ ("₹89,900 – ₹1,09,999"). Each row has a **pencil** opening
   an inline **details editor** — name, category (same grouped "Root › Sub"
@@ -948,6 +996,9 @@ frontend/
     │   │                        #   favicon to the store's logo (app default when
     │   │                        #   none / on leaving — used by PublicStoreLayout)
     │   ├── usePageTitle.ts      # Per-page document.title ("Part · Part · Unie Max")
+    │   ├── useGoBack.ts         # Back controls that STEP BACK (navigate(-1)) instead
+    │   │                        #   of pushing the previous page again, with a
+    │   │                        #   replace-fallback for direct opens
     │   ├── theme/               # Design-system tokens + runtime theming — see below
     │   │   ├── index.ts          # Barrel: `theme` aggregate + re-exports
     │   │   ├── colors.ts         # palette + dark/light schemes + semantic colors
@@ -966,7 +1017,12 @@ frontend/
     │   │   │                     #   AppLogoFull (splash screens) — both render the
     │   │   │                     #   single master public/app_logo.png, which is also
     │   │   │                     #   the tab icon in both HTML entries
-    │   │   ├── ConfirmDialog.tsx # Reusable confirmation modal (used by logout)
+    │   │   ├── ConfirmDialog.tsx # Reusable confirmation modal (used by logout).
+    │   │   │                     #   Portals into document.body — callers mount it
+    │   │   │                     #   beside their trigger, and a `backdrop-blur`
+    │   │   │                     #   ancestor (the sticky headers) is a containing
+    │   │   │                     #   block for `fixed`, which pinned the overlay to
+    │   │   │                     #   the header instead of centring it on screen
     │   │   └── socialIcons.tsx   # Social brand glyphs + SOCIAL_META (label + icon per platform)
     │   ├── maps/
     │   │   └── googleMaps.ts     # Maps JS API script loader (VITE_GOOGLE_MAPS_API_KEY,
@@ -1062,6 +1118,8 @@ frontend/
     │           ├── StorePublishCard.tsx # Publish/Unpublish toggle + Share Store
     │           ├── StoreDetailsPage.tsx # Name + logo upload (crop → progress → replace/remove)
     │           ├── ProductMediaManager.tsx # Per-product photos (8, DnD reorder, cover) + video
+    │           ├── NewProductPhotos.tsx # Add-Product photo picker: crops locally,
+    │           │                     #   uploads after the product id exists
     │           ├── StoreAppearancePage.tsx # Colors + live preview
     │           ├── StoreHomepagePage.tsx # Show/hide storefront homepage sections
     │           ├── StoreFooterPage.tsx  # Footer manager: locations, social, info,

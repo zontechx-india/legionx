@@ -393,7 +393,17 @@ function SearchBox({ store, skin }: { store: PublicStore; skin: Skin }) {
 
 function CartButton({ skin, storeSlug }: { skin: Skin; storeSlug: string }) {
   const items = useCart()
-  const count = items.reduce((sum, item) => sum + item.qty, 0)
+  /**
+   * THIS store's items only. The cart is one cart across stores, but this
+   * button opens `/cart?from={slug}`, which leads with this store's group —
+   * a badge counting other stores' items would promise a number the next
+   * screen doesn't show. The marketplace header, which opens the unscoped
+   * cart, still counts everything.
+   */
+  const count = items.reduce(
+    (sum, item) => (item.storeSlug === storeSlug ? sum + item.qty : sum),
+    0,
+  )
 
   return (
     <a

@@ -1,13 +1,22 @@
 import { useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import type { ReactNode } from 'react'
 
 /**
- * Accessible confirmation dialog (no portal/deps needed — it renders as a
- * fixed overlay above everything).
+ * Accessible confirmation dialog, rendered into `document.body` via a portal.
  *
  *   - Escape or a backdrop click cancels (disabled while `busy`).
  *   - Focus lands on the cancel button when the dialog opens.
  *   - `busy` locks both buttons for async confirms (e.g. a logout request).
+ *
+ * **The portal is load-bearing, not tidiness.** Callers mount this next to
+ * their trigger, and several triggers live inside sticky headers that carry
+ * `backdrop-blur`. `backdrop-filter` makes an element a containing block for
+ * `position: fixed` descendants, so without the portal `inset-0` resolved to
+ * the 4rem header instead of the viewport and the dialog appeared squeezed
+ * against the top of the page (the account-menu logout did exactly this).
+ * Escaping to `<body>` makes the overlay viewport-centred wherever it is
+ * used from.
  */
 export function ConfirmDialog({
   open,
@@ -73,7 +82,7 @@ export function ConfirmDialog({
       ? 'bg-brand text-brand-contrast hover:bg-brand-hover'
       : 'bg-fg text-bg hover:opacity-90'
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--overlay)] p-4 sm:items-center"
       onMouseDown={() => {
@@ -119,6 +128,7 @@ export function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

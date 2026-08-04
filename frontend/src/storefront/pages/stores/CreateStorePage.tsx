@@ -10,6 +10,7 @@ import {
   validateFile,
 } from '../../../shared/media/mediaConfig'
 import { ErrorNote, TextField } from '../../../shared/ui/form'
+import { useGoBack } from '../../../shared/useGoBack'
 import { storesApi } from '../../features/stores/storesApi'
 import { ArrowLeftIcon, ImageIcon } from '../../layout/icons'
 
@@ -49,11 +50,7 @@ export function CreateStorePage() {
    * to wherever the visitor actually came from. Fallback for a direct open
    * (no in-app history, e.g. straight after login): the marketplace home.
    */
-  const goBack = () => {
-    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0
-    if (idx > 0) navigate(-1)
-    else navigate('/')
-  }
+  const goBack = useGoBack('/')
 
   const pick = (file: File | undefined) => {
     if (!file || !config) return

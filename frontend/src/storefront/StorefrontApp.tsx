@@ -1,9 +1,11 @@
+import { useCallback } from 'react'
 import { RouterProvider } from 'react-router-dom'
 import { customerAuth } from '../shared/auth/authApi'
 import { useSession } from '../shared/auth/useSession'
 import { MarketSessionProvider } from './app/marketSession'
 import { router } from './app/router'
 import { publicRouter } from './app/publicRouter'
+import { cart } from './features/cart/cart'
 
 /**
  * Storefront root.
@@ -34,8 +36,34 @@ export function StorefrontApp() {
 function MarketplaceApp() {
   const { state, signedIn, signOut } = useSession(customerAuth)
 
+  /**
+   * Logging out empties the cart as well as the session.
+   *
+   * The cart is device-local (localStorage, no server copy — public store
+   * pages are anonymous), so signing out otherwise leaves the previous
+   * customer's basket sitting there for whoever uses the browser next. It
+   * runs in `finally`: `useSession.signOut` drops to guest even when the
+   * revoke request fails, and a locally-signed-out account must not keep a
+   * cart either.
+   *
+   * Only an EXPLICIT logout gets here. An expired session (the 401 path out
+   * of checkout) redirects to `/login` without calling this, so the cart
+   * survives to be paid for after signing back in.
+   */
+  const signOutAndClearCart = useCallback(async () => {
+    try {
+      await signOut()
+    } finally {
+      cart.clear()
+    }
+  }, [signOut])
+
   return (
-    <MarketSessionProvider state={state} signedIn={signedIn} signOut={signOut}>
+    <MarketSessionProvider
+      state={state}
+      signedIn={signedIn}
+      signOut={signOutAndClearCart}
+    >
       <RouterProvider router={router} />
     </MarketSessionProvider>
   )

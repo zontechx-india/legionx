@@ -25,6 +25,8 @@ import {
   TrashIcon,
 } from '../../layout/icons'
 import { ActiveSwitch } from './ActiveSwitch'
+import { NewProductPhotos } from './NewProductPhotos'
+import type { PendingPhoto } from './NewProductPhotos'
 import { ProductMediaManager } from './ProductMediaManager'
 
 /**
@@ -241,7 +243,7 @@ export function StoreProductsPage() {
         <AddProductForm
           storeId={store.id}
           categories={categories}
-          onCreated={(product) => {
+          onCreated={(product, warning) => {
             setProducts((list) => [product, ...(list ?? [])])
             setCategories((cats) =>
               (cats ?? []).map((c) =>
@@ -250,6 +252,10 @@ export function StoreProductsPage() {
                   : c,
               ),
             )
+            // The product itself was created — a photo that failed to upload
+            // must not read as a failed save, so it is reported up here
+            // rather than keeping the (now duplicate-prone) form open.
+            setError(warning ?? null)
             setShowForm(false)
           }}
           onCancel={() => setShowForm(false)}
@@ -1229,7 +1235,8 @@ function AddProductForm({
 }: {
   storeId: string
   categories: StoreCategory[]
-  onCreated: (product: StoreProduct) => void
+  /** `warning` = the product saved, but some photos didn't upload. */
+  onCreated: (product: StoreProduct, warning?: string) => void
   onCancel: () => void
 }) {
   const [name, setName] = useState('')
@@ -1246,6 +1253,17 @@ function AddProductForm({
   const [variantRows, setVariantRows] = useState<
     { name: string; price: string; stock: string }[]
   >([{ name: '', price: '', stock: '' }])
+  /**
+   * Photos picked and cropped locally. They can only be uploaded once the
+   * product has an id, so they wait here and go up right after create.
+   */
+  const [photos, setPhotos] = useState<PendingPhoto[]>([])
+  /**
+   * Photo upload progress — drives the submit button label. `null` until the
+   * product is created, so the button says "Adding…" for the create call and
+   * only then starts counting photos.
+   */
+  const [uploaded, setUploaded] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -1336,12 +1354,47 @@ function AddProductForm({
 
     setError(null)
     setBusy(true)
+    setUploaded(null)
+
+    let created: StoreProduct
     try {
-      onCreated(await storeCatalogApi.createProduct(storeId, payload))
+      created = await storeCatalogApi.createProduct(storeId, payload)
     } catch (err) {
       setError(toApiError(err).message)
       setBusy(false)
+      return
     }
+
+    /**
+     * The product now exists — everything past this point is best-effort.
+     * Photos upload one at a time (each response is a fresh snapshot of the
+     * parent product, so they must not race), and a failure never strands
+     * the flow: the row still appears and the seller is told which photos to
+     * re-add from its Photos & video panel.
+     */
+    let product = created
+    let failed = 0
+    if (photos.length > 0) setUploaded(0)
+    for (const photo of photos) {
+      try {
+        product = await storeCatalogApi.addProductMedia(
+          storeId,
+          created.id,
+          photo.blob,
+          photo.filename,
+        )
+      } catch {
+        failed += 1
+      }
+      setUploaded((n) => (n ?? 0) + 1)
+    }
+
+    onCreated(
+      product,
+      failed > 0
+        ? `“${product.name}” was added, but ${failed} photo${failed === 1 ? '' : 's'} could not be uploaded. Open the product and use Photos & video to add ${failed === 1 ? 'it' : 'them'} again.`
+        : undefined,
+    )
   }
 
   return (
@@ -1410,6 +1463,12 @@ function AddProductForm({
           className="w-full rounded-md border border-line bg-input px-3.5 py-2.5 text-sm text-fg outline-none transition-all placeholder:text-muted focus:border-accent"
         />
       </label>
+
+      <NewProductPhotos
+        photos={photos}
+        onChange={setPhotos}
+        disabled={busy}
+      />
 
       {/* Product shape switch — the one control that decides where price and
           stock are entered. */}
@@ -1497,7 +1556,11 @@ function AddProductForm({
           disabled={busy}
           className="h-11 rounded-md bg-brand-gradient px-5 text-sm font-semibold text-brand-contrast shadow-floating transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-none disabled:bg-line disabled:text-muted"
         >
-          {busy ? 'Adding…' : 'Add Product'}
+          {!busy
+            ? 'Add Product'
+            : uploaded === null
+              ? 'Adding…'
+              : `Uploading photo ${Math.min(uploaded + 1, photos.length)} of ${photos.length}…`}
         </button>
         <button
           type="button"

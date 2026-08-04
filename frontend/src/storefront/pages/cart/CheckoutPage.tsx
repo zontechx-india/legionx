@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useGoBack } from '../../../shared/useGoBack'
 import { usePageTitle } from '../../../shared/usePageTitle'
 import { customerAuth } from '../../../shared/auth/authApi'
 import { toApiError } from '../../../shared/auth/http'
@@ -55,6 +56,7 @@ export function CheckoutPage({ storeSlug }: { storeSlug: string }) {
   const group = groupByStore(items).find((g) => g.storeSlug === storeSlug)
   usePageTitle('Place Order', group?.storeName ?? shell?.name)
   const navigate = useNavigate()
+  const goBack = useGoBack(cartUrl(storeSlug))
 
   const [checkout, setCheckout] = useState<CheckoutState>({
     delivery: null,
@@ -123,14 +125,18 @@ export function CheckoutPage({ storeSlug }: { storeSlug: string }) {
     >
       <header className="sticky top-0 z-40 border-b border-line bg-bg/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1920px] items-center gap-3 px-4 py-3 sm:px-6 lg:px-10">
-          <Link
-            // Keep this store's theme when going back to the combined cart.
-            to={cartUrl(storeSlug)}
-            aria-label="Back to cart"
+          {/* Steps BACK (see useGoBack) — as a Link this pushed a second
+              cart entry, leaving checkout ahead in the stack and trapping
+              the visitor between the two pages. Direct opens fall back to
+              this store's cart, keeping its theme. */}
+          <button
+            type="button"
+            onClick={goBack}
+            aria-label="Go back"
             className="flex h-10 w-10 items-center justify-center rounded-full text-muted transition hover:bg-surface-alt"
           >
             <ArrowLeftIcon className="h-5 w-5" />
-          </Link>
+          </button>
           <span className="font-body text-lg font-semibold tracking-normal">
             Checkout
           </span>
@@ -309,8 +315,11 @@ function SignInToOrder({ storeSlug }: { storeSlug: string }) {
         you&rsquo;ll come right back here to finish checking out.
       </p>
       <div className="mt-5 flex gap-3">
+        {/* `replace`: this checkout is a dead end for a guest, so it should
+            not sit in history for Back to land on again. */}
         <Link
           to={cartUrl(storeSlug)}
+          replace
           className="rounded-md border border-line px-5 py-2.5 text-sm font-semibold text-fg transition hover:bg-surface-alt"
         >
           Back to cart
@@ -382,8 +391,11 @@ function NothingToOrder({
           : 'Your cart has no items from this store.'}
       </p>
       <div className="mt-5 flex gap-3">
+        {/* `replace` for the same reason as the guest gate: there is nothing
+            to order here, so this entry shouldn't be a Back target. */}
         <Link
           to={cartUrl(storeSlug)}
+          replace
           className="rounded-md border border-line px-5 py-2.5 text-sm font-semibold text-fg transition hover:bg-surface-alt"
         >
           Back to cart

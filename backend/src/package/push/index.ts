@@ -24,9 +24,31 @@ export type {
   PushTarget,
 } from "./types.js";
 
-export const push: PushSender = pushConfig.configured
-  ? createWebPushDriver()
-  : createConsolePushDriver();
+/**
+ * Pick the driver, degrading to the console on ANY initialisation failure.
+ *
+ * Push is an optional feature; a malformed key or subject must never stop the
+ * API from booting. `web-push` validates its VAPID details eagerly and throws,
+ * and this module is imported at startup — without this guard a stray
+ * character in `.env` crash-loops the whole server (which is exactly what it
+ * did once). Failing loudly but *softly* keeps orders flowing while making the
+ * misconfiguration obvious in the logs.
+ */
+function selectDriver(): PushSender {
+  if (!pushConfig.configured) return createConsolePushDriver();
+  try {
+    return createWebPushDriver();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(
+      "⚠️  Web Push is misconfigured — falling back to console delivery.",
+      err,
+    );
+    return createConsolePushDriver();
+  }
+}
+
+export const push: PushSender = selectDriver();
 
 /** Handed to clients so they can call `pushManager.subscribe()`. */
 export const pushPublicKey = push.publicKey;

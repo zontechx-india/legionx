@@ -202,22 +202,23 @@ Notes:
 ### The `/admin` console needs its own nginx fallback
 
 The admin app is a **second SPA** (`admin.html`) served at `/admin` on the same
-origin, with client-side routes like `/admin/orders/abc`. Each site config
-(`uniemax`, `uniemax-domain`, `uniemax-prod`, `uniemax-prod-domain`) needs the
-`/admin` block **before** the catch-all:
+origin, with client-side routes like `/admin/orders/abc`. All four site configs
+(`uniemax`, `uniemax-domain`, `uniemax-prod`, `uniemax-prod-domain`) **already
+carry** these two blocks ahead of the catch-all — verified on the server:
 
 ```nginx
-location /admin { try_files $uri /admin.html; }   # console deep links
-location /      { try_files $uri /index.html;  }  # storefront
+location = /admin  { try_files /admin.html =404; }   # the bare path
+location ^~ /admin/ { try_files $uri /admin.html; }  # deep links + assets
+location /          { try_files $uri $uri/ /index.html; }  # storefront
 ```
 
-Without it, `/admin` still loads (nginx resolves the extensionless file) but a
-refresh on any deeper path falls through to the storefront. Verify after a
-deploy:
+`^~` matters: it stops nginx from falling through to `location /` for anything
+under `/admin/`, so a refresh on a console route returns `admin.html` instead
+of the storefront. Verify after a deploy (`8080` = dev, `8081` = prod):
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' -H 'Accept: text/html' http://127.0.0.1:8080/admin/orders   # 200
-curl -s -H 'Accept: text/html' http://127.0.0.1:8080/admin/orders | grep -o 'assets/admin'          # matches
+curl -s -H 'Accept: text/html' http://127.0.0.1:8080/admin/orders | grep -c assets/admin   # 1
+curl -s http://127.0.0.1:8080/ | grep -c assets/storefront                                 # 1
 ```
 
 ### Web Push env (`VAPID_*`)
@@ -229,7 +230,15 @@ invalidates every browser subscription:
 ```bash
 cd ~/uniemax/backend && npm run push-keys   # paste the three lines into .env
 pm2 restart uniemax-backend
+curl -s http://127.0.0.1:4000/api/v1/public/push-config   # {"publicKey":"B…","enabled":true}
 ```
+
+> ⚠️ **Edit `.env` on the server with an editor, not a shell one-liner.**
+> Quoting through PowerShell → plink → bash mangles values (a `VAPID_SUBJECT`
+> once landed as `" mailto:…\`). `VAPID_SUBJECT` must be a plain `mailto:` or
+> `https:` URL; anything else is now rejected by `package/push/config.ts`,
+> which warns and falls back to the default rather than letting the server
+> fail to boot.
 
 Without the keys the app still works — the in-app notification bell fills
 normally and the server logs each push instead of sending it. Push also

@@ -34,12 +34,6 @@ and loads `.env.<mode>` first, then `.env` for anything the overlay omits.
 Locally nothing is set, so you get development. On the server pm2 supplies
 `APP_ENV=production` via `ecosystem.config.cjs`.
 
-Point a local run at the production database for a one-off:
-
-```powershell
-$env:APP_ENV="production"; npm run dev        # or: npm run db:status
-```
-
 Every entrypoint prints its resolved target at boot, so the active database is
 never a guess:
 
@@ -48,6 +42,8 @@ env: mode=development NODE_ENV=development db=aws-1-….pooler.supabase.com:6543
 ```
 
 > A key belongs to **either** `.env` **or** a per-mode file, never both.
+
+**Copy-paste commands for switching: [ENV.md](./ENV.md).**
 
 Verify: `curl http://localhost:4000/health`
 

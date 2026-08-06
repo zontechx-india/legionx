@@ -14,6 +14,7 @@ one file (no duplication).
 | An API endpoint (add/remove/params/response)     | [`docs/API.md`](./docs/API.md)      |
 | Architecture, module pattern, conventions, stack | [`docs/BACKEND_CONTEXT.md`](./docs/BACKEND_CONTEXT.md) |
 | Backend setup, scripts, or env vars              | [`backend/README.md`](./backend/README.md) |
+| Env switching commands (dev ↔ production)        | [`backend/ENV.md`](./backend/ENV.md) |
 | Product scope / features / requirements          | [`docs/CONTEXT.md`](./docs/CONTEXT.md) |
 | High-level project overview or features list     | [`README.md`](./README.md)          |
 | Prisma schema models/enums                       | [`docs/BACKEND_CONTEXT.md`](./docs/BACKEND_CONTEXT.md) (Data Model section) |

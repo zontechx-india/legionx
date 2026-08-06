@@ -76,23 +76,36 @@ then `.env` for whatever the overlay omits:
 | `backend/.env.production` | `NODE_ENV=production`, prod DB pair, `CORS_ORIGIN`, `PUBLIC_WEB_URL`, `PUBLIC_API_URL`, the server's `VAPID_*` pair |
 | `backend/ecosystem.config.cjs` | **In git.** Sets `APP_ENV=production` for pm2 — the whole switch |
 
-`.env.development` is **not** deployed; it only exists on dev machines. Both
-server files are uploaded together, and because `.env.production` now carries
-the server's own VAPID keys, an upload can no longer clobber them.
+**Live since 2026-08-07.** The pm2 side was applied with `pm2 delete` +
+`pm2 start ecosystem.config.cjs` + `pm2 save` (a plain `pm2 restart` does not
+adopt a new ecosystem file). Pre-split backup:
+`~/uniemax/backup/env.pre-split-20260807`.
 
-Apply the pm2 side once (from `~/uniemax/backend`):
-
-```bash
-pm2 restart ecosystem.config.cjs --update-env && pm2 save
-pm2 logs uniemax-backend --nostream --lines 5   # env: mode=production … db=aws-0-…
-```
+> ⚠️ **`.env.development` must NEVER exist on the server.** If `APP_ENV` were
+> ever lost, the loader would fall back to development mode; with no
+> `.env.development` present that fails loudly, but with one present it would
+> silently point production at the **dev database**. Its absence is a guard.
 
 Every entrypoint prints `env: mode=… NODE_ENV=… db=<host> web=…` at boot, so a
-wrong-database deploy is visible in `pm2 logs` immediately.
+wrong-database deploy is visible in `pm2 logs` immediately:
 
-Legacy note: a single combined `.env` still works — with `APP_ENV` unset the
-loader falls back to `.env` alone, so the old layout keeps booting until the
-split is uploaded.
+```
+env: mode=production NODE_ENV=production db=aws-0-ap-south-1.pooler.supabase.com:6543 web=https://uniemax.com
+```
+
+Because the shared `.env` no longer carries `DATABASE_URL`, **any Prisma CLI
+command on the server needs the prefix** — without it you get
+`Error: The datasource.url property is required…` rather than a silent hit on
+the wrong database:
+
+```bash
+APP_ENV=production npm run db:status
+APP_ENV=production npm run db:deploy
+```
+
+Legacy note: a single combined `.env` still boots — with `APP_ENV` unset the
+loader falls back to `.env` alone. That fallback is what let the loader ship
+one deploy ahead of this split.
 
 - `backend/.env` — the shared half, copied from the local dev machine
   (`d:\Live Project\Client Project\Legionx\backend\.env`).

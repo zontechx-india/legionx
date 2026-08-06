@@ -22,7 +22,11 @@ Key facts:
   `zjbeveonmeqnmsjbjomw`), but only whichever pair is active in the server's
   `backend/.env` is live. Never edit that file as part of a routine deploy.
 - Env files are not in git and persist across deploys — only re-upload (pscp)
-  when a new var was added, and back up to `~/uniemax/backup/` first.
+  when a new var was added, and back up to `~/uniemax/backup/` first. The
+  server holds `.env` (shared) + `.env.production` (overlay); pm2 supplies
+  `APP_ENV=production` via `ecosystem.config.cjs`. **Never put
+  `.env.development` on the server** — it would become the fallback if
+  `APP_ENV` were ever lost, silently pointing production at the dev database.
 
 Summary of the flow:
 

@@ -54,7 +54,7 @@ function wrapHtml(title: string, bodyHtml: string): string {
   <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px">
     <h2 style="margin:0 0 12px;font-size:18px;color:#111">${title}</h2>
     ${bodyHtml}
-    <p style="margin:24px 0 0;font-size:12px;color:#888">Sent by Unie Max.</p>
+    <p style="margin:24px 0 0;font-size:12px;color:#888">Sent by UnieMax.</p>
   </div>`;
 }
 

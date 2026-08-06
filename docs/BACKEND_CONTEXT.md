@@ -503,13 +503,13 @@ White-label design — one codebase, any business:
   store; unique per store on `accountNumber + ifsc`; service caps at 5).
   Fields: holder name, account number (9–18 digits), IFSC, bank name,
   branch, optional UPI id. Exactly **one per store is `isPrimary`** — the
-  only account that receives payouts from Unie Max (first saved account is
+  only account that receives payouts from UnieMax (first saved account is
   primary automatically; promoting one demotes the current primary in the
   same transaction; deleting the primary never auto-promotes — the payout
   target must be an explicit choice, payouts hold until one is picked).
   **Verification is provisioned, not wired**: `verificationStatus`
   (`PENDING`/`VERIFIED`/`FAILED`, default `PENDING`), `verificationMethod`
-  (`THIRD_PARTY` account-validation provider / `MANUAL` by a Unie Max admin
+  (`THIRD_PARTY` account-validation provider / `MANUAL` by a UnieMax admin
   from the future admin panel), `verificationRef` (provider check id),
   `verifiedBy` (admin id), `verificationNote`, `verifiedAt`. Editing any
   bank detail of a verified account resets it to `PENDING`
@@ -650,7 +650,6 @@ Enums: `ProductStatus`, `OrderStatus`, `PaymentMethod`, `PaymentStatus`, `Shippi
 | `npm run push-keys` | Generate a VAPID key pair for Web Push (run once per environment) |
 | `npm run backfill-catalog` | Fill missing category/product slugs, recompute price aggregates, stamp `publishedAt` on pre-column published stores (idempotent) |
 | `npx prisma generate` | Regenerate client after schema edits            |
-| `npx prisma db push`  | Sync schema to the database                     |
 
 Key env vars. App-level (`config/env.ts`): `DATABASE_URL`, `DIRECT_URL`, `CORS_ORIGIN`,
 `TRUST_PROXY`, plus `HOST`/`PORT`/`LOG_LEVEL`, and the Cashfree gateway set

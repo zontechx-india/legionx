@@ -146,7 +146,7 @@ export default function CustomerDetailPage() {
         <Card>
           <CardHeader title="Stores owned" />
           {customer.stores.length === 0 ? (
-            <p className="py-4 text-sm text-muted">This account doesn't sell on Unie Max.</p>
+            <p className="py-4 text-sm text-muted">This account doesn't sell on UnieMax.</p>
           ) : (
             <ul className="space-y-2">
               {customer.stores.map((store) => (

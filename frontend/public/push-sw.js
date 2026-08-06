@@ -1,4 +1,4 @@
-/* Unie Max push service worker.
+/* UnieMax push service worker.
  *
  * Deliberately tiny and dependency-free: it only renders pushes and routes
  * clicks. It caches nothing and intercepts no fetches, so it can never serve
@@ -18,10 +18,10 @@ self.addEventListener('push', (event) => {
   } catch {
     // A payload we can't parse still deserves a visible notification —
     // browsers penalise a push handler that shows nothing.
-    payload = { title: 'Unie Max', body: 'You have a new notification.' }
+    payload = { title: 'UnieMax', body: 'You have a new notification.' }
   }
 
-  const title = payload.title || 'Unie Max'
+  const title = payload.title || 'UnieMax'
   event.waitUntil(
     self.registration.showNotification(title, {
       body: payload.body || '',

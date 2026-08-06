@@ -21,7 +21,7 @@ export function AppLayout() {
         <Link to="/" className="flex shrink-0 items-center gap-2.5">
           <AppLogoMark className="h-8 w-8" />
           <span className="whitespace-nowrap font-heading text-xl font-semibold text-fg">
-            Unie Max
+            UnieMax
           </span>
         </Link>
 

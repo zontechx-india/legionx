@@ -232,7 +232,7 @@ export type StoreFooterPatch = Partial<StoreFooter>
 
 /**
  * Payment methods the store accepts — how customers PAY. Online payment is
- * processed by Unie Max (payouts go to the seller's primary bank account);
+ * processed by UnieMax (payouts go to the seller's primary bank account);
  * the actual gateway arrives with the payments module — these switches gate
  * what the checkout will offer. How customers RECEIVE the order lives in
  * the separate shipping settings (`StoreShipping`).
@@ -706,7 +706,7 @@ export interface StoreDashboard {
 
 /**
  * Verification lifecycle of a payout account. Accounts start PENDING; the
- * third-party account-validation and the Unie Max admin panel (both future)
+ * third-party account-validation and the UnieMax admin panel (both future)
  * move them to VERIFIED/FAILED. Editing a verified account's bank details
  * resets it to PENDING.
  */
@@ -715,7 +715,7 @@ export type BankVerificationMethod = 'THIRD_PARTY' | 'MANUAL'
 
 /**
  * A seller payout account. Exactly one per store is `isPrimary` — that
- * account alone receives payouts from Unie Max when customers pay through
+ * account alone receives payouts from UnieMax when customers pay through
  * the platform.
  */
 export interface StoreBankAccount {

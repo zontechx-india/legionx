@@ -15,7 +15,7 @@ import {
 } from '../ui/format'
 
 /**
- * The platform dashboard — the answer to "how is Unie Max doing today", and
+ * The platform dashboard — the answer to "how is UnieMax doing today", and
  * the jumping-off point for everything else.
  *
  * One request feeds the whole page (`GET /admin/dashboard`), so the tiles,

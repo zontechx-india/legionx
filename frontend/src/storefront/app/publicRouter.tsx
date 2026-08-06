@@ -90,7 +90,7 @@ function PublicError() {
           href="/"
           className="rounded-md bg-brand-gradient px-5 py-2.5 text-sm font-semibold text-brand-contrast shadow-floating transition hover:opacity-90"
         >
-          Back to Unie Max
+          Back to UnieMax
         </a>
         <a
           href="/cart"

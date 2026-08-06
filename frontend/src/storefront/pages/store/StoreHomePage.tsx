@@ -325,7 +325,7 @@ function Hero({
         {/* Display copy is select-none: a stray drag otherwise highlights the
             headline, which reads as glitchy. */}
         <div className="max-w-2xl select-none">
-          {/* Wide-tracked eyebrow (prototype: "UNIE MAX · SPORTS FACTORY"). */}
+          {/* Wide-tracked eyebrow (prototype: "UnieMax · SPORTS FACTORY"). */}
           <span className="text-[11px] font-semibold uppercase tracking-[0.3em] text-brand">
             Welcome to
           </span>

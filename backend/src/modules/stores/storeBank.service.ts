@@ -18,7 +18,7 @@ import type {
  *    NOT auto-promote another (payouts must never silently retarget); the
  *    seller explicitly picks the next primary.
  *  - accounts start `PENDING`; the verification fields are provisioned for
- *    the third-party account-validation integration and the Unie Max admin
+ *    the third-party account-validation integration and the UnieMax admin
  *    panel (both future). Editing any bank detail of a verified/failed
  *    account resets it to PENDING for re-verification.
  */

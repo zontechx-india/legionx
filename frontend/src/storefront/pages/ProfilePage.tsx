@@ -238,7 +238,7 @@ function LinkPhoneSection({ onLinked }: { onLinked: (customer: Customer) => void
             </p>
             <p className="mt-1 text-xs text-muted">
               Link your number to also sign in with an SMS one-time code. A
-              number can be linked to only one Unie Max account.
+              number can be linked to only one UnieMax account.
             </p>
             <button
               type="button"

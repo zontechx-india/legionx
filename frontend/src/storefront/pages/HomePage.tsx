@@ -161,7 +161,7 @@ function MarketHeader() {
         <Link to="/" className="flex shrink-0 items-center gap-3">
           <AppLogoMark className="h-10 w-10 md:h-12 md:w-12" />
           <span className="whitespace-nowrap font-heading text-xl font-semibold text-fg sm:text-2xl">
-            Unie Max
+            UnieMax
           </span>
         </Link>
 
@@ -174,7 +174,7 @@ function MarketHeader() {
 
         <div className="ml-auto flex shrink-0 items-center gap-3 sm:gap-4 md:ml-0 lg:gap-6">
           <CreateStoreLink className="hidden whitespace-nowrap text-sm font-semibold text-muted transition-colors hover:text-fg lg:block">
-            Sell on Unie Max
+            Sell on UnieMax
           </CreateStoreLink>
           <ThemeToggle className="h-10 w-10" />
           {/* Plain <a>: /cart lives in the public router (full page load). */}
@@ -1321,7 +1321,7 @@ function MarketFooter() {
             <Link to="/" className="flex items-center gap-2">
               <AppLogoMark className="h-8 w-8" />
               <span className="font-heading text-lg font-semibold text-fg">
-                Unie Max
+                UnieMax
               </span>
             </Link>
             <p className="mt-3 text-sm text-muted">
@@ -1352,7 +1352,7 @@ function MarketFooter() {
 
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-muted">
-              Sell on Unie Max
+              Sell on UnieMax
             </p>
             <p className="mt-3 text-sm text-muted">
               Open your own store in minutes — no technical knowledge required.
@@ -1365,7 +1365,7 @@ function MarketFooter() {
 
         <div className="mt-10 flex flex-col gap-4 border-t border-line pt-6 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-muted">
-            © {new Date().getFullYear()} Unie Max · All rights reserved
+            © {new Date().getFullYear()} UnieMax · All rights reserved
           </p>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted">
             <span className="flex items-center gap-1.5">

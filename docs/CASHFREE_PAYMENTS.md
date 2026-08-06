@@ -39,11 +39,16 @@ behavior exactly: development *simulates* ONLINE payments
 with `503`. Production boot fails fast if only one of the two keys is set.
 
 > ⚠️ **Sandbox is no longer used anywhere (since 2026-07-30).** Every
-> environment — local, `dev.uniemax.zontechx.com`, and
-> `uniemax.zontechx.com` — runs `CASHFREE_ENV=production` with the live
-> merchant keys, and all three share one backend (`:4000`) and one database.
+> environment — local, `dev.uniemax.zontechx.com`, and `uniemax.com` — runs
+> `CASHFREE_ENV=production` with the live merchant keys, and all three share
+> one backend (`:4000`) and whichever database that backend's `.env` names.
 > **Any order placed in any environment charges a real card**, including
 > test orders on the dev domain. Refunds are still manual (see Known gaps).
+
+`PUBLIC_WEB_URL` (return_url) and `PUBLIC_API_URL` (notify_url) must both be
+`https://uniemax.com` on the server — the old `uniemax.zontechx.com` domain is
+retired, so a stale value sends paying customers to a dead host and silently
+breaks webhook delivery.
 
 ## Payment flow (create order)
 

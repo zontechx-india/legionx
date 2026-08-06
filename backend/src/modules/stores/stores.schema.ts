@@ -161,7 +161,7 @@ export const storePublishSchema = z.object({
 /**
  * Seller-configured acceptance switches — how customers PAY.
  * `acceptOnlinePayment` is the platform-processed payment (customers pay
- * through Unie Max, seller is paid out to their primary bank account — the
+ * through UnieMax, seller is paid out to their primary bank account — the
  * payments module wires the actual gateway later); `acceptCod` is cash on
  * delivery. Defaults: COD on (the Phase-1 method), online off. How
  * customers RECEIVE the order (delivery / pickup) lives in the separate

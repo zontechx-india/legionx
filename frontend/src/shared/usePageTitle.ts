@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 
-const APP_NAME = 'Unie Max'
+const APP_NAME = 'UnieMax'
 
 /**
  * Per-page `document.title` (IMPROVEMENTS item: every page shared one SPA

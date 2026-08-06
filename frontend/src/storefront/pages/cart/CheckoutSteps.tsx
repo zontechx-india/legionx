@@ -640,7 +640,7 @@ function PaymentStep({
       ? {
           key: 'ONLINE' as const,
           title: 'Online Payment',
-          description: 'Pay securely through Unie Max — UPI, cards and more.',
+          description: 'Pay securely through UnieMax — UPI, cards and more.',
         }
       : null,
     shell.payments.acceptCod

@@ -83,7 +83,7 @@ export default function CustomersPage() {
 
   return (
     <>
-      <PageHeader title="Customers" subtitle="Everyone with a Unie Max account" />
+      <PageHeader title="Customers" subtitle="Everyone with a UnieMax account" />
 
       <Card padded={false}>
         <Tabs

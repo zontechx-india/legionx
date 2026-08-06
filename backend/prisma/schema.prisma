@@ -483,7 +483,7 @@ enum StoreMediaType {
 
 /// Verification state of a seller payout account. Accounts start PENDING;
 /// verification will be performed by a third-party provider (penny-drop /
-/// account validation API) and can also be done manually by a Unie Max admin
+/// account validation API) and can also be done manually by a UnieMax admin
 /// from the future admin panel. Editing a verified account's details resets
 /// it to PENDING.
 enum BankVerificationStatus {
@@ -500,7 +500,7 @@ enum BankVerificationMethod {
 }
 
 /// A seller's payout bank account (a store can save several). Exactly ONE
-/// may be primary — that account alone receives payouts from Unie Max when
+/// may be primary — that account alone receives payouts from UnieMax when
 /// customers pay through the platform. Verification fields are provisioned
 /// ahead of the integrations: `verificationRef` stores the third-party
 /// provider's check id, `verifiedBy` the admin who manually verified

@@ -1,4 +1,4 @@
-# Unie Max — Flow, UI & UX Improvement Backlog
+# UnieMax — Flow, UI & UX Improvement Backlog
 
 > Full-system review of the customer flow (public storefront), owner flow
 > (store management), UI and UX — what's missing, what's inconsistent, and

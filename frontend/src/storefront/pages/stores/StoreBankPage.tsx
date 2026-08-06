@@ -20,10 +20,10 @@ import {
 /**
  * Bank Accounts section of Store Management — the seller's payout accounts.
  * A store can save up to 5; exactly one is **primary**, and that account
- * alone receives payouts from Unie Max when customers pay through the
+ * alone receives payouts from UnieMax when customers pay through the
  * platform. Every account carries a verification status: it starts
  * "Pending verification" and will be checked by a third-party validator or
- * manually by a Unie Max admin (admin panel is a future module — the status
+ * manually by a UnieMax admin (admin panel is a future module — the status
  * fields are provisioned now). Editing a verified account's bank details
  * resets it to pending.
  */
@@ -127,7 +127,7 @@ export function StoreBankPage() {
         Bank Accounts
       </h2>
       <p className="mt-1 text-sm text-muted">
-        Where Unie Max sends your payouts when customers pay through the
+        Where UnieMax sends your payouts when customers pay through the
         platform. Only the <span className="font-semibold text-fg">primary</span>{' '}
         account receives payouts. New and edited accounts are verified before
         payouts are released.
@@ -150,7 +150,7 @@ export function StoreBankPage() {
               No bank account yet
             </p>
             <p className="mt-1 max-w-sm text-sm text-muted">
-              Add your payout account so Unie Max can transfer your sales
+              Add your payout account so UnieMax can transfer your sales
               earnings to you.
             </p>
           </div>

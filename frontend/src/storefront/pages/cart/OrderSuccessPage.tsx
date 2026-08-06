@@ -290,7 +290,7 @@ export function OrderSuccessPage({
                 href="/"
                 className="flex h-11 items-center justify-center rounded-md border border-line px-6 text-sm font-semibold text-muted transition hover:bg-surface-alt hover:text-fg"
               >
-                Back to Unie Max
+                Back to UnieMax
               </a>
             </div>
           </>

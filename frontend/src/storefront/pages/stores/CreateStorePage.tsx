@@ -45,7 +45,7 @@ export function CreateStorePage() {
   )
 
   /**
-   * This page is reached from several places (homepage "Sell on Unie Max" /
+   * This page is reached from several places (homepage "Sell on UnieMax" /
    * Become a Seller, the account menu, the My Stores list), so Back returns
    * to wherever the visitor actually came from. Fallback for a direct open
    * (no in-app history, e.g. straight after login): the marketplace home.

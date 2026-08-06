@@ -1,4 +1,4 @@
-# Push Notifications — Unie Max
+# Push Notifications — UnieMax
 
 > How notifications work end to end: the feed, Web Push delivery, the events
 > that fire, and what to configure before going live.
@@ -83,7 +83,7 @@ Without both keys the server logs pushes instead of sending them and
 ### 2. Serve over HTTPS
 
 The Push API requires a secure context. `localhost` counts as secure, so dev
-works over plain HTTP; **any other host must be HTTPS**. Both Unie Max
+works over plain HTTP; **any other host must be HTTPS**. Both UnieMax
 environments already are.
 
 ### 3. Nothing else

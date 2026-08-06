@@ -32,7 +32,7 @@ The first implementation will be for a **Cricket Bat Store**, but the architectu
 - Create and manage own online stores (a single account can own multiple
   stores; one is "active" at a time — see Store Creation & Management)
 
-## Admin (Unie Max platform staff)
+## Admin (UnieMax platform staff)
 - View the platform dashboard (revenue, orders, stores, customers, trends)
 - Oversee orders and payments across every store
 - Oversee the seller catalog; hide a listing that breaks the rules
@@ -118,7 +118,7 @@ A single account can own multiple stores and switch between them.
   - **Copyright** — a custom line, defaulting to
     "© {year} {store name}. All Rights Reserved."
 - **Bank accounts (payouts)** — the seller registers the bank account(s)
-  Unie Max pays their sales earnings into (used when customers pay through
+  UnieMax pays their sales earnings into (used when customers pay through
   the platform; the payments module itself is a later release). Up to 5
   accounts, each with account holder name, account number (entered twice to
   confirm), IFSC, bank name, branch and an optional UPI ID. Exactly **one
@@ -126,11 +126,11 @@ A single account can own multiple stores and switch between them.
   never silently retargets payouts (they hold until the seller explicitly
   picks another). Every account carries a **verification status** (pending
   → verified / failed): verification will be performed by a third-party
-  account validator and can also be done manually by a Unie Max admin from
+  account validator and can also be done manually by a UnieMax admin from
   the future admin panel — the data model and statuses are provisioned now.
   Editing a verified account's details resets it to pending.
 - **Payment settings** — Yes/No switches deciding how customers **pay**:
-  **Accept Online Payment** (paid through Unie Max, settled to the seller's
+  **Accept Online Payment** (paid through UnieMax, settled to the seller's
   primary bank account — the gateway itself ships with the payments module)
   and **Accept Cash on Delivery** (the default-on Phase-1 method). Because
   a change applies to the live checkout immediately, every toggle asks for
@@ -676,7 +676,7 @@ This approach provides a flexible authentication experience while ensuring that 
 
 # Platform Admin Console (`/admin`)
 
-The Unie Max operator's console — a **separate application** from the
+The UnieMax operator's console — a **separate application** from the
 storefront (its own bundle, downloaded only by someone who opens `/admin`),
 sharing the same look through one token layer. Fully responsive: a fixed
 sidebar on a laptop, a drawer on a phone, and every table becomes a stacked

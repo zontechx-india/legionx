@@ -13,7 +13,7 @@ entries, two bundles, one origin:
 | App        | Served at        | Audience                | API surface           |
 | ---------- | ---------------- | ----------------------- | --------------------- |
 | Storefront | `/` (everything else) | Customers & sellers | `/api/v1/...`         |
-| Admin      | **`/admin`**     | Unie Max platform staff | `/api/v1/admin/...`   |
+| Admin      | **`/admin`**     | UnieMax platform staff | `/api/v1/admin/...`   |
 
 This mirrors the backend, which already splits its routes into a public
 (customer) subtree and an `/admin` subtree (see [BACKEND_CONTEXT.md](./BACKEND_CONTEXT.md)).
@@ -121,7 +121,7 @@ for guests and signed-in customers alike and adapts per session state.
   out as four zones separated by large gaps (`gap-5` → `lg:gap-12`) rather
   than a dense cluster: brand (logo `h-10`/`md:h-12` + `text-xl`/`sm:text-2xl`
   wordmark) · **global search centered in the toolbar** on md+, dropping to
-  its own row under the bar below md · "Sell on Unie Max" link (lg+) · then
+  its own row under the bar below md · "Sell on UnieMax" link (lg+) · then
   the utilities (theme toggle · cart link with count · Sign in /
   `AccountMenu`, all `h-10`, `gap-3` → `lg:gap-6`; the old hairline separator
   was removed — the gap does that job). **Full-bleed** like the storefront
@@ -173,7 +173,7 @@ for guests and signed-in customers alike and adapts per session state.
   **footer** is a structured 4-column block: brand + tagline, Marketplace
   (About / Support / Contact) and Legal (Privacy / Terms) columns
   (→ `pages/InfoComingSoonPage.tsx`, public placeholders), and a Sell on
-  Unie Max column with a Become a Seller button. Every section still
+  UnieMax column with a Become a Seller button. Every section still
   fetches independently with its own skeleton and retry — one failed API
   never blanks the page.
 - **Global search** (`features/discovery/discoveryApi.ts` →
@@ -669,8 +669,8 @@ it with a full page load (`<a href>`), which resets `idx` to 0 even though
 the store is one browser step back.
 
 Every public page sets a **per-route `document.title`** via
-`shared/usePageTitle.ts` — "Product · Store · Unie Max", "Search "q" ·
-Store · Unie Max", "Your Cart · Unie Max", etc. (SPA-only: real OG/meta tags
+`shared/usePageTitle.ts` — "Product · Store · UnieMax", "Search "q" ·
+Store · UnieMax", "Your Cart · UnieMax", etc. (SPA-only: real OG/meta tags
 for crawlers wait for SSR/prerender).
 
 - `storesApi.ts` — typed HTTP client (list/create/get/update/updateTheme/
@@ -995,7 +995,7 @@ frontend/
     │   ├── favicon.ts           # Runtime tab-icon control: store pages swap the
     │   │                        #   favicon to the store's logo (app default when
     │   │                        #   none / on leaving — used by PublicStoreLayout)
-    │   ├── usePageTitle.ts      # Per-page document.title ("Part · Part · Unie Max")
+    │   ├── usePageTitle.ts      # Per-page document.title ("Part · Part · UnieMax")
     │   ├── useGoBack.ts         # Back controls that STEP BACK (navigate(-1)) instead
     │   │                        #   of pushing the previous page again, with a
     │   │                        #   replace-fallback for direct opens
@@ -1013,7 +1013,7 @@ frontend/
     │   │   ├── form.tsx          # Auth primitives: AuthLayout (split screen), Hero,
     │   │   │                     #   AuthCard, TextField, Select (themed, custom
     │   │   │                     #   chevron), SegmentedTabs, buttons, icons
-    │   │   ├── AppLogo.tsx       # Unie Max brand marks: AppLogoMark (UM monogram) +
+    │   │   ├── AppLogo.tsx       # UnieMax brand marks: AppLogoMark (UM monogram) +
     │   │   │                     #   AppLogoFull (splash screens) — both render the
     │   │   │                     #   single master public/app_logo.png, which is also
     │   │   │                     #   the tab icon in both HTML entries
@@ -1169,7 +1169,7 @@ The authoritative design system lives in the repo-root `skillui/` package
 (the **anydesk** system: dark-themed, cool palette, 4px grid). Its colors,
 spacing, radius and type scale are used as-is; the typefaces are the one
 deliberate deviation (Oswald + Inter instead of Times New Roman + Noto
-Sans, adopted from the approved Unie Max prototype — see below). **Read `skillui/SKILL.md` before building
+Sans, adopted from the approved UnieMax prototype — see below). **Read `skillui/SKILL.md` before building
 any UI.** Its tokens are materialized into reusable TypeScript constants
 under `src/shared/theme/` — the single source both apps import instead of
 hardcoding colors, fonts, spacing, radii, or shadows:
@@ -1288,7 +1288,7 @@ fails AA against `#121212`.
   `useTheme() → { mode, setMode, toggle }`; `ThemeToggle` (sun/moon) sits in
   the storefront top bar. Both apps are wrapped in `ThemeProvider`.
 - **Fonts** (a deliberate deviation from the skill's Times New Roman / Noto
-  Sans pairing, adopted from the approved Unie Max prototype
+  Sans pairing, adopted from the approved UnieMax prototype
   `prototype/index.html`): headings/display use **Oswald** — a condensed,
   athletic face carrying a constant **+0.02em tracking** (applied by the base
   `h1–h3` rule and re-asserted by the `font-heading` utility, which therefore

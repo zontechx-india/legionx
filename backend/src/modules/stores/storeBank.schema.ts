@@ -3,11 +3,11 @@ import { z } from "zod";
 /**
  * Seller payout bank accounts. A store can save several (capped), exactly
  * one may be **primary** — the only account that receives payouts from
- * Unie Max when customers pay through the platform.
+ * UnieMax when customers pay through the platform.
  *
  * Verification is provisioned but not wired yet: accounts start PENDING and
  * will be verified by a third-party account-validation provider or manually
- * by a Unie Max admin (future admin panel). Editing any bank detail of a
+ * by a UnieMax admin (future admin panel). Editing any bank detail of a
  * verified account resets it to PENDING for re-verification.
  */
 

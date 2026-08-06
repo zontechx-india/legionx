@@ -163,7 +163,7 @@ export async function setVisibility(
     principalType: "CUSTOMER",
     principalId: product.store.ownerId,
     kind: "STORE",
-    title: input.isActive ? "Product restored" : "Product hidden by Unie Max",
+    title: input.isActive ? "Product restored" : "Product hidden by UnieMax",
     body: input.isActive
       ? `"${product.name}" is visible on your storefront again.`
       : `"${product.name}" was hidden from your storefront. ${input.reason ?? "Contact support for details."}`,

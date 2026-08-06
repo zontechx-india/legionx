@@ -28,7 +28,7 @@ export function InfoComingSoonPage() {
         className="mb-8 flex items-center gap-2 text-lg font-semibold text-fg"
       >
         <AppLogoMark className="h-9 w-9" />
-        <span className="font-heading">Unie Max</span>
+        <span className="font-heading">UnieMax</span>
       </Link>
 
       <h1 className="font-heading text-3xl font-bold text-fg">{title}</h1>

@@ -30,9 +30,9 @@ const METHODS: {
     key: 'acceptOnlinePayment',
     title: 'Accept Online Payment',
     description:
-      'Customers pay through Unie Max (UPI, cards…). Your earnings are paid out to your primary bank account.',
+      'Customers pay through UnieMax (UPI, cards…). Your earnings are paid out to your primary bank account.',
     confirmOn:
-      'Customers will be able to pay online through Unie Max, and your earnings will be paid out to your primary bank account.',
+      'Customers will be able to pay online through UnieMax, and your earnings will be paid out to your primary bank account.',
     confirmOff:
       'Customers will no longer be able to pay online — only your other enabled methods remain available at checkout.',
   },

@@ -455,7 +455,7 @@ most one primary location — so clients never normalise it themselves.
 ```
 The store's payment acceptance switches (**how customers pay**), stored as
 the `Store.payments` JSON column (defaults: COD **on**, online off).
-`acceptOnlinePayment` = customers pay through Unie Max (payouts go to the
+`acceptOnlinePayment` = customers pay through UnieMax (payouts go to the
 seller's primary bank account; the gateway arrives with the payments
 module), `acceptCod` = cash on delivery. Every store response returns
 `payments` resolved to the complete shape, and the **public shell** includes
@@ -495,10 +495,10 @@ Publish / unpublish the store's public page. Returns the full store.
 ### Payout bank accounts — `/api/v1/stores/:id/bank-accounts`
 
 The seller's payout accounts (max **5** per store). Exactly one account is
-**primary** — the only account that receives payouts from Unie Max when
+**primary** — the only account that receives payouts from UnieMax when
 customers pay through the platform. Every account carries a
 **verification** state: it starts `PENDING` and will be verified by a
-third-party account validator or manually by a Unie Max admin (admin panel
+third-party account validator or manually by a UnieMax admin (admin panel
 is a future module — the fields are provisioned now, the verification
 endpoints arrive with it). Editing any bank detail of a verified account
 resets it to `PENDING`.
@@ -1294,7 +1294,7 @@ transactionally; pushes go out in batches afterwards.
 
 ## Platform Admin Console — `/api/v1/admin` 🔒 admin
 
-The Unie Max operator's API, behind `requireAdmin`. **Money is always a
+The UnieMax operator's API, behind `requireAdmin`. **Money is always a
 decimal string** (`"14250.00"`), never a float. Every write appends a row to
 the audit trail.
 

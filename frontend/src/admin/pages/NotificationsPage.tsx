@@ -153,7 +153,7 @@ export default function NotificationsPage() {
                 value={body}
                 onChange={(event) => setBody(event.target.value)}
                 maxLength={300}
-                placeholder="Unie Max will be briefly unavailable between 2–3 am IST."
+                placeholder="UnieMax will be briefly unavailable between 2–3 am IST."
               />
               <TextInput
                 label="Link (optional)"

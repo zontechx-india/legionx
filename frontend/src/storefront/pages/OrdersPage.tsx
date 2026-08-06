@@ -56,7 +56,7 @@ export function OrdersPage() {
         My Orders
       </h1>
       <p className="mt-1 text-sm text-muted">
-        Everything you've ordered across Unie Max stores, newest first.
+        Everything you've ordered across UnieMax stores, newest first.
       </p>
 
       <div className="mt-5 space-y-4">

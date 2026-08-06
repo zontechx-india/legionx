@@ -108,7 +108,7 @@ function AdminHero() {
       image="/auth_hero_1.jpg"
       logo={
         <>
-          <AppLogoMark className="h-8 w-8" /> Unie Max Admin
+          <AppLogoMark className="h-8 w-8" /> UnieMax Admin
         </>
       }
     >

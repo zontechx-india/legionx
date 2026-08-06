@@ -4,7 +4,7 @@
  * Scale/weights/line-heights come from the skill
  * (`skillui/tokens/typography.json` + `DESIGN.md` §3). The two families
  * deviate from the skill by design decision, adopted from the approved
- * Unie Max prototype (`prototype/index.html`):
+ * UnieMax prototype (`prototype/index.html`):
  *
  * - Oswald — condensed display face for headings, product names and prices
  *   (athletic/retail character; always tracked +0.02em — see `index.css`).

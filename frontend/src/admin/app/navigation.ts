@@ -69,5 +69,5 @@ const TITLES: [string, string][] = [
 
 export function titleForPath(pathname: string): string {
   const match = TITLES.find(([prefix]) => pathname.startsWith(prefix))
-  return `${match?.[1] ?? 'Dashboard'} · Unie Max Admin`
+  return `${match?.[1] ?? 'Dashboard'} · UnieMax Admin`
 }

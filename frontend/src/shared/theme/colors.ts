@@ -1,5 +1,5 @@
 /**
- * Color tokens — anydesk design system (skillui) with the approved Unie Max
+ * Color tokens — anydesk design system (skillui) with the approved UnieMax
  * brand palette.
  *
  * ⚠️ **This file is a documentation mirror, not the runtime source.** Nothing

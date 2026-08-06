@@ -1,5 +1,5 @@
 /**
- * Runtime favicon control. The default tab icon is the Unie Max mark
+ * Runtime favicon control. The default tab icon is the UnieMax mark
  * (`/app_logo.png`, wired in both HTML entries); a store page swaps it for
  * the store's own logo while the visitor is inside that store and restores
  * the default on the way out.
@@ -34,7 +34,7 @@ export function setFavicon(url: string | null | undefined): void {
   }
 }
 
-/** Back to the Unie Max favicon. */
+/** Back to the UnieMax favicon. */
 export function resetFavicon(): void {
   setFavicon(null)
 }

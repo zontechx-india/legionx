@@ -98,7 +98,7 @@ export function AdminLayout() {
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r border-line bg-surface lg:flex">
         <div className="flex h-16 items-center gap-2 border-b border-line px-5">
           <AppLogoMark className="h-8 w-8" />
-          <span className="font-heading text-base font-semibold text-fg">Unie Max</span>
+          <span className="font-heading text-base font-semibold text-fg">UnieMax</span>
           <span className="rounded-pill bg-brand/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-fg">
             Admin
           </span>
@@ -148,7 +148,7 @@ export function AdminLayout() {
             <MenuIcon />
           </button>
           <span className="truncate font-heading text-base font-semibold text-fg lg:hidden">
-            Unie Max Admin
+            UnieMax Admin
           </span>
           <div className="ml-auto flex items-center gap-1">
             <a

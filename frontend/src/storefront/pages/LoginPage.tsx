@@ -64,12 +64,12 @@ export function LoginPage({ onSignedIn }: { onSignedIn: (customer: Customer) => 
   return (
     <AuthLayout
       hero={<StorefrontHero />}
-      footer={<p className="text-xs text-muted">© Unie Max · Terms · Privacy</p>}
+      footer={<p className="text-xs text-muted">© UnieMax · Terms · Privacy</p>}
     >
       <Brand
         badge={<AppLogoMark className="h-14 w-14" />}
         badgeClass=""
-        title="Unie Max"
+        title="UnieMax"
         subtitle="Sign in to continue shopping"
       />
 
@@ -740,7 +740,7 @@ function StorefrontHero() {
       image="/auth_hero_1.jpg"
       logo={
         <>
-          <AppLogoMark className="h-8 w-8" /> Unie Max
+          <AppLogoMark className="h-8 w-8" /> UnieMax
         </>
       }
     >

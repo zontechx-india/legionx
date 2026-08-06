@@ -1,6 +1,6 @@
-# Unie Max — EC2 Deployment
+# UnieMax — EC2 Deployment
 
-Live deployment of the Unie Max platform (GitHub repo is still named `legionx`;
+Live deployment of the UnieMax platform (GitHub repo is still named `legionx`;
 on the server everything is named `uniemax`).
 
 ## Server
@@ -37,8 +37,8 @@ plink -batch -ssh -hostkey "SHA256:HgxgT0NGDiSy1s8opS1b41JcA67ndeHN87b9Sk8DlME" 
 | `/etc/nginx/sites-available/uniemax`  | nginx site — IP access, ports 80 + 8080 (symlinked into `sites-enabled`) |
 | `/etc/nginx/sites-available/uniemax-domain` | nginx vhost for `dev.uniemax.zontechx.com` + HTTPS (certbot-managed) |
 | `/var/www/uniemax-prod`               | nginx web root for the **prod** frontend (updated only by `/deploy_prod`) |
-| `/etc/nginx/sites-available/uniemax-prod` | nginx site — prod frontend by IP on port 8081 |
-| `/etc/nginx/sites-available/uniemax-prod-domain` | nginx vhost for `uniemax.zontechx.com` (prod) |
+| `/etc/nginx/sites-available/uniemax-prod` | nginx site — prod frontend by IP on port 8081 (root `/var/www/uniemax-prod`) |
+| `/etc/nginx/sites-available/uniemax-com` | nginx vhost for `uniemax.com` + `www.uniemax.com` — prod domain, HTTPS (certbot), root `/var/www/uniemax-prod`, `/api` → `:4000` |
 | `/home/ubuntu/uniemax/backup/`        | Backup of the previous deployment's backend `.env` (git-ignored via `.git/info/exclude`) |
 
 The EC2's own SSH key is registered with GitHub (user `anwin-paulji`), so
@@ -48,11 +48,11 @@ The EC2's own SSH key is registered with GitHub (user `anwin-paulji`), so
 
 | Port | Service                            | Reachable from internet? |
 | ---- | ---------------------------------- | ------------------------ |
-| 8080 | **nginx → Unie Max frontend + `/api` proxy (dedicated port, for domain mapping)** | needs TCP 8080 inbound in the security group |
-| 8081 | **nginx → Unie Max PROD frontend + `/api` proxy (dedicated port)** | needs TCP 8081 inbound in the security group |
-| 80   | nginx → same Unie Max site (`default_server`, kept temporarily) | ✅ (security group open) |
+| 8080 | **nginx → UnieMax frontend + `/api` proxy (dedicated port, for domain mapping)** | needs TCP 8080 inbound in the security group |
+| 8081 | **nginx → UnieMax PROD frontend + `/api` proxy (dedicated port)** | needs TCP 8081 inbound in the security group |
+| 80   | nginx → same UnieMax site (`default_server`, kept temporarily) | ✅ (security group open) |
 | 443  | nginx (other project SSL)          | ✅                       |
-| 4000 | Unie Max backend (Fastify, pm2 `uniemax-backend`) | ❌ internal only — proxied via nginx `/api` |
+| 4000 | UnieMax backend (Fastify, pm2 `uniemax-backend`) | ❌ internal only — proxied via nginx `/api` |
 | 3000 | ziktag-backend (other project)     | ❌ (SG blocks)           |
 | 3004 | track-user-backend (other project) | ✅                       |
 
@@ -72,28 +72,75 @@ other pm2 apps (`ziktag-backend`, `track-user-backend`) are untouched.
   **Two vars must NOT be copied verbatim** — they are localhost on the dev
   machine and must point at the server's own domain:
 
-  | Var              | Local                   | Server                          |
-  | ---------------- | ----------------------- | ------------------------------- |
-  | `PUBLIC_WEB_URL` | `http://localhost:5173` | `https://uniemax.zontechx.com`  |
-  | `PUBLIC_API_URL` | (unset)                 | `https://uniemax.zontechx.com`  |
+  | Var              | Local                   | Server (correct value)  |
+  | ---------------- | ----------------------- | ----------------------- |
+  | `PUBLIC_WEB_URL` | `http://localhost:5173` | `https://uniemax.com`   |
+  | `PUBLIC_API_URL` | (unset)                 | `https://uniemax.com`   |
 
   Both point at the **production** domain because one backend (`:4000`)
   serves dev, prod and the `:8081` site — so the return URL can only match
   one of them, and real customers must be the ones it matches. A payment
   started on `dev.uniemax.zontechx.com` therefore returns the customer to
-  `uniemax.zontechx.com`; the order still resolves because both share one
-  database.
+  `uniemax.com`.
 
   `PUBLIC_WEB_URL` builds the Cashfree `return_url` (a localhost value sends
   paying customers to their own machine) and `PUBLIC_API_URL` builds the
-  webhook `notify_url`. After any `.env` re-upload, re-apply both and
-  restart pm2. Back up the previous file to `~/uniemax/backup/` first.
-  Note the local `.env` may have **no trailing newline** — append with
-  `printf '\n…'` or the new var lands on the last comment line and is
-  silently ignored.
+  webhook `notify_url` (`<PUBLIC_API_URL>/api/v1/payments/webhooks/cashfree`).
+  After any `.env` re-upload, re-apply both and restart pm2. Back up the
+  previous file to `~/uniemax/backup/` first. Note the local `.env` may have
+  **no trailing newline** — append with `printf '\n…'` or the new var lands on
+  the last comment line and is silently ignored.
+
+  `CORS_ORIGIN` is **required** once `NODE_ENV=production`: the app is
+  cookie-credentialed, so `config/env.ts` refuses to boot on the `*` default.
+  Current value:
+  `https://uniemax.com,https://www.uniemax.com,https://dev.uniemax.zontechx.com,http://localhost:5173`
 - `frontend/.env` — contains only `VITE_GOOGLE_MAPS_API_KEY`.
   `VITE_API_URL` is deliberately **unset** so the built app calls the API
   same-origin (`/api/...`), which nginx proxies to `127.0.0.1:4000`.
+
+### Databases (two Supabase projects)
+
+| Env  | Supabase ref           | Pooler host                            |
+| ---- | ---------------------- | -------------------------------------- |
+| dev  | `sysjwxfwkydhtclukuxh` | `aws-1-ap-south-1.pooler.supabase.com` |
+| prod | `zjbeveonmeqnmsjbjomw` | `aws-0-ap-south-1.pooler.supabase.com` |
+
+`DATABASE_URL` uses the transaction pooler (`:6543?pgbouncer=true`) for
+runtime; `DIRECT_URL` uses the session pooler (`:5432`) for migrations. Note
+the pooler prefix differs per project (`aws-1-` dev, `aws-0-` prod) — copy it
+from Supabase → Connect, don't assume.
+
+Never use the `db.<ref>.supabase.co` host Supabase labels "Direct connection":
+it is IPv6-only and the EC2 box is IPv4, so it fails with `ENETUNREACH`. A
+password containing `@` must be percent-encoded (`%40`) inside the URL, or the
+string splits at the wrong `@` and the host parses as garbage.
+
+The prod database schema was created on 2026-08-06 with `npm run db:deploy`
+(all 3 migrations, **no data copied** from dev).
+
+> ⚠️ There is only **one** backend process, so whichever pair is active in
+> `backend/.env` is the database for the dev site, the prod site and `:8081`
+> alike. Separating them requires a second pm2 app on its own port with its
+> own `.env`, and an nginx `/api` proxy change on the dev server block.
+
+#### Cutting the server over to the prod database
+
+The server's `.env` (verified 2026-08-06) is still `NODE_ENV=development`,
+on the **dev** database, with `PUBLIC_WEB_URL`/`PUBLIC_API_URL` pointing at
+the retired `uniemax.zontechx.com`. Cutover = upload the local `.env`
+(already configured for prod) and restart:
+
+```bash
+cp ~/uniemax/backend/.env ~/uniemax/backup/env.pre-proddb   # back up first
+# pscp the local .env up, then:
+cd ~/uniemax/backend && npm run db:status   # expect "up to date" against aws-0-
+pm2 restart uniemax-backend && pm2 save
+pm2 logs uniemax-backend --nostream --lines 20   # must NOT show a config exit
+```
+
+The prod DB has no admin account until `npm run create-admin -- <email> <pw>`
+is run against it.
 
 ## URLs
 
@@ -109,21 +156,27 @@ other pm2 apps (`ziktag-backend`, `track-user-backend`) are untouched.
 
 | URL                                          | What                                  |
 | -------------------------------------------- | ------------------------------------- |
-| **`https://uniemax.zontechx.com/`**          | PROD storefront                       |
-| **`https://uniemax.zontechx.com/admin`**     | PROD admin app                        |
+| **`https://uniemax.com/`**                   | PROD storefront (primary)             |
+| **`https://uniemax.com/admin`**              | PROD admin app                        |
+| **`https://uniemax.com/api/v1/...`**         | API (proxied to :4000)                |
+| `https://www.uniemax.com/`                   | Same site (covered by the same cert)  |
 | `http://13.206.249.204:8081/`                | Same prod site, direct port (needs TCP 8081 in SG) |
 
 Prod serves its own frontend build from `/var/www/uniemax-prod` (nginx sites
-`uniemax-prod` on port 8081 + `uniemax-prod-domain` for the domain) but shares
-the **same backend** (`uniemax-backend`, :4000) and database as dev. The prod
-frontend only changes when `/deploy_prod` runs, so it can intentionally lag
-behind dev. Backend changes deployed via `/deploy_dev` affect **both** sites.
+`uniemax-prod` on port 8081 + `uniemax-com` for the domain) but shares the
+**same backend** (`uniemax-backend`, :4000) as dev. The prod frontend only
+changes when `/deploy_prod` runs, so it can intentionally lag behind dev.
+Backend changes deployed via `/deploy_dev` affect **both** sites.
 
-Prod domain & HTTPS (set up 2026-07-29): Cloudflare A record
-`uniemax.zontechx.com` → `13.206.249.204` (**DNS only** / grey cloud — same
-renewal rule as dev), Let's Encrypt cert via `certbot --nginx` (cert name
-`uniemax.zontechx.com`, auto-renews, expires/rolls 2026-10-27), HTTP→HTTPS 301
-on the domain. TCP 8081 is open in the security group for direct-IP access.
+Prod domain & HTTPS: A record `uniemax.com` (+ `www`) → `13.206.249.204`
+(**DNS only** / grey cloud — same renewal rule as dev), Let's Encrypt cert via
+`certbot --nginx` (cert name `uniemax.com`, covers `uniemax.com` +
+`www.uniemax.com`, auto-renews, expires 2026-11-04), HTTP→HTTPS 301 on the
+domain. TCP 8081 is open in the security group for direct-IP access.
+
+> The old prod domain `uniemax.zontechx.com` is **retired** — its vhost
+> (`uniemax-prod-domain`) no longer exists on the server, replaced by
+> `uniemax-com`. Do not reintroduce it in configs or docs.
 
 ## Domain & HTTPS
 
@@ -151,7 +204,7 @@ For production, run **`/deploy_prod`** — frontend-only: same pull as below, th
 `npm run build` in `frontend/` and copy `dist/*` to `/var/www/uniemax-prod`
 (never touches the backend/pm2). Verify prod via
 `curl http://127.0.0.1:8081/` + `/admin` + `/api/v1/public/stores` on the
-server, then `https://uniemax.zontechx.com/` from the local machine.
+server, then `https://uniemax.com/` from the local machine.
 
 > ⚠️ **The repo root is an npm workspace** (`frontend` + `backend`). Always run
 > `npm ci` from the repo **root** (`~/uniemax`). Running it inside `backend/` or
@@ -169,6 +222,7 @@ npm ci --no-audit --no-fund
 # 2. Backend (skip if no backend/ or prisma/ files changed)
 cd ~/uniemax/backend
 npx prisma generate        # needed whenever schema or deps changed
+npm run db:deploy          # apply any new committed migrations (no-op if none)
 npm run build
 pm2 restart uniemax-backend && pm2 save
 
@@ -250,6 +304,6 @@ requires HTTPS, which both domains already have. Full detail:
 ## Naming note
 
 The GitHub repository is still called **legionx** (`zontechx-india/legionx`);
-the product and everything on the server is named **uniemax / Unie Max**. The
+the product and everything on the server is named **uniemax / UnieMax**. The
 repo will be renamed later — when that happens, update the git remote on the
 server: `git remote set-url origin git@github.com:zontechx-india/<new-name>.git`.

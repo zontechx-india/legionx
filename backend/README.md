@@ -1,4 +1,4 @@
-# Unie Max Backend
+# UnieMax Backend
 
 Fastify + Prisma 7 + PostgreSQL (Supabase) API for the white-label e-commerce platform.
 

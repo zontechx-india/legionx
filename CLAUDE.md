@@ -1,4 +1,4 @@
-# Unie Max — Project Instructions
+# UnieMax — Project Instructions
 
 White-label e-commerce platform. Backend: Fastify + Prisma 7 + PostgreSQL (Supabase).
 Frontend: React + Tailwind.
@@ -41,4 +41,7 @@ Rules:
   identifier). Guards in `middleware/auth.ts` (`requireAdmin` / `requireCustomer`);
   wrong-kind token → 403, missing/invalid → 401. New protected routes must use the right
   guard.
-- After editing `prisma/schema.prisma`: run `npx prisma generate` (+ `db push` to apply).
+- After editing `prisma/schema.prisma`: run `npm run db:migrate` (creates + applies a
+  migration locally) and **commit `prisma/migrations/`** — that committed folder is how
+  the change reaches production, which runs `npm run db:deploy`. Never `prisma db push`:
+  it mutates the local DB without producing a migration, so production never learns of it.

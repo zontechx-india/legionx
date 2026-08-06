@@ -1,3 +1,5 @@
+// MUST be first — decides which database this script writes to.
+import "../config/loadEnv.js";
 import { prisma } from "../config/prisma.js";
 import {
   recomputeProductAggregates,

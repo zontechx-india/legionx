@@ -1,8 +1,12 @@
 node_modules
 dist
 
-# Keep environment variables out of version control
+# Keep environment variables out of version control.
+# Covers .env, .env.development, .env.production — everything except the
+# committed template.
 .env
+.env.*
+!.env.example
 
 # Prisma generated client
 /src/generated

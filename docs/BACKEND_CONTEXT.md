@@ -651,6 +651,17 @@ Enums: `ProductStatus`, `OrderStatus`, `PaymentMethod`, `PaymentStatus`, `Shippi
 | `npm run backfill-catalog` | Fill missing category/product slugs, recompute price aggregates, stamp `publishedAt` on pre-column published stores (idempotent) |
 | `npx prisma generate` | Regenerate client after schema edits            |
 
+**Environment files are layered, never edited to switch.** `config/loadEnv.ts`
+resolves `mode = APP_ENV ?? NODE_ENV ?? "development"` and loads
+`.env.<mode>` (wins) then `.env` (shared fallback). It is the **first import**
+of every entrypoint — `server.ts`, `prisma.config.ts`, and the `scripts/` —
+so the Prisma CLI always targets the same database the server would. The
+`import "dotenv/config"` lines inside `package/*` stay as extraction-ready
+fallbacks; they no-op once the loader has run. Invariant: a key lives in
+either `.env` or a per-mode file, never both. `config/env.ts` prints
+`env: mode=… NODE_ENV=… db=<host> web=…` at boot. On the server pm2 supplies
+`APP_ENV=production` via `backend/ecosystem.config.cjs`.
+
 Key env vars. App-level (`config/env.ts`): `DATABASE_URL`, `DIRECT_URL`, `CORS_ORIGIN`,
 `TRUST_PROXY`, plus `HOST`/`PORT`/`LOG_LEVEL`, and the Cashfree gateway set
 `CASHFREE_APP_ID` / `CASHFREE_SECRET_KEY` / `CASHFREE_ENV`

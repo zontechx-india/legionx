@@ -1,4 +1,4 @@
-import "dotenv/config";
+import { appEnv } from "./loadEnv.js";
 import { z } from "zod";
 
 /**
@@ -71,6 +71,25 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
+
+// ---------------------------------------------------------------------------
+// Boot banner — "which database am I actually talking to?" must never be a
+// guess. Printed by every entrypoint (server and CLI scripts alike) before
+// anything touches the DB. The password is stripped, never the host.
+// ---------------------------------------------------------------------------
+function dbTarget(url: string | undefined): string {
+  if (!url) return "(unset)";
+  try {
+    return new URL(url).host;
+  } catch {
+    return "(unparseable)";
+  }
+}
+
+// eslint-disable-next-line no-console
+console.log(
+  `env: mode=${appEnv} NODE_ENV=${env.NODE_ENV} db=${dbTarget(env.DATABASE_URL)} web=${process.env["PUBLIC_WEB_URL"] ?? "(unset)"}`,
+);
 
 /** `TRUST_PROXY` → Fastify's `trustProxy` (boolean, hop count, or address list). */
 export function resolveTrustProxy(): boolean | number | string {

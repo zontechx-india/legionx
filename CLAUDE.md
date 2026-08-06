@@ -41,6 +41,12 @@ Rules:
   identifier). Guards in `middleware/auth.ts` (`requireAdmin` / `requireCustomer`);
   wrong-kind token → 403, missing/invalid → 401. New protected routes must use the right
   guard.
+- **Env files are layered, never edited to switch environments.** `config/loadEnv.ts`
+  loads `.env.<mode>` then `.env`, where `mode = APP_ENV ?? NODE_ENV ?? "development"`.
+  Locally that means dev; pm2 sets `APP_ENV=production` on the server. One-off local
+  run against prod: `$env:APP_ENV="production"; npm run dev`. A key lives in either
+  `.env` or a per-mode file, never both. New entrypoints must `import "./config/loadEnv.js"`
+  **first**.
 - After editing `prisma/schema.prisma`: run `npm run db:migrate` (creates + applies a
   migration locally) and **commit `prisma/migrations/`** — that committed folder is how
   the change reaches production, which runs `npm run db:deploy`. Never `prisma db push`:

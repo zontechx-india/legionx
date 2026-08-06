@@ -39,9 +39,15 @@ Summary of the flow:
      changed (inspect the incoming diff with `git diff --stat HEAD..origin/main`).
    - Only run `npm ci` at all when `package-lock.json` changed.
    - **If `prisma/migrations/` gained a folder in the incoming diff, run
-     `npm run db:deploy` before `npm run build`** — it applies pending
-     migrations and is a no-op when there are none. Skipping it means the new
-     code runs against an old schema and every affected query 500s.
+     `APP_ENV=production npm run db:deploy` before `npm run build`** — it
+     applies pending migrations and is a no-op when there are none. Skipping
+     it means the new code runs against an old schema and every affected
+     query 500s. The `APP_ENV=production` prefix is required: without it the
+     Prisma CLI resolves to development mode and targets the wrong database
+     (or none at all, once the server's `.env` is split).
+   - After restarting, confirm the boot banner in `pm2 logs` reads
+     `mode=production` and `db=aws-0-…` — that is the cheapest possible check
+     that the right database is live.
 4. **Verify (never skip):** pm2 online with stable restart count, port 4000
    listening, local curl 200, then from the local machine check the public
    URLs (storefront `/`, `/admin`, `/api/v1/public/stores`).

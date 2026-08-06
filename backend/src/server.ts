@@ -1,3 +1,5 @@
+// MUST be first: loads .env.<mode> + .env before any module reads process.env.
+import "./config/loadEnv.js";
 import { buildApp } from "./app.js";
 import { env } from "./config/env.js";
 

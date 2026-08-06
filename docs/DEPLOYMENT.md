@@ -66,11 +66,38 @@ other pm2 apps (`ziktag-backend`, `track-user-backend`) are untouched.
 
 ## Env files (not in git)
 
-- `backend/.env` — copied from the local dev machine
-  (`d:\Live Project\Client Project\Legionx\backend\.env`). Key values:
-  `PORT=4000`, `HOST=0.0.0.0`, `STORAGE_DRIVER=s3`, Supabase `DATABASE_URL`.
-  **Two vars must NOT be copied verbatim** — they are localhost on the dev
-  machine and must point at the server's own domain:
+**Layered, never edited to switch.** `backend/src/config/loadEnv.ts` resolves
+`mode = APP_ENV ?? NODE_ENV ?? "development"` and loads `.env.<mode>` first,
+then `.env` for whatever the overlay omits:
+
+| File on the server | Contents |
+| ------------------ | -------- |
+| `backend/.env` | Shared values — JWT, S3/AWS, Cashfree, Resend, Message Central, media rules, `HOST`/`PORT`/`LOG_LEVEL`, `VAPID_SUBJECT` |
+| `backend/.env.production` | `NODE_ENV=production`, prod DB pair, `CORS_ORIGIN`, `PUBLIC_WEB_URL`, `PUBLIC_API_URL`, the server's `VAPID_*` pair |
+| `backend/ecosystem.config.cjs` | **In git.** Sets `APP_ENV=production` for pm2 — the whole switch |
+
+`.env.development` is **not** deployed; it only exists on dev machines. Both
+server files are uploaded together, and because `.env.production` now carries
+the server's own VAPID keys, an upload can no longer clobber them.
+
+Apply the pm2 side once (from `~/uniemax/backend`):
+
+```bash
+pm2 restart ecosystem.config.cjs --update-env && pm2 save
+pm2 logs uniemax-backend --nostream --lines 5   # env: mode=production … db=aws-0-…
+```
+
+Every entrypoint prints `env: mode=… NODE_ENV=… db=<host> web=…` at boot, so a
+wrong-database deploy is visible in `pm2 logs` immediately.
+
+Legacy note: a single combined `.env` still works — with `APP_ENV` unset the
+loader falls back to `.env` alone, so the old layout keeps booting until the
+split is uploaded.
+
+- `backend/.env` — the shared half, copied from the local dev machine
+  (`d:\Live Project\Client Project\Legionx\backend\.env`).
+  **These two vars live in `.env.production`, never in the shared file** —
+  they are localhost on the dev machine and must point at the public domain:
 
   | Var              | Local                   | Server (correct value)  |
   | ---------------- | ----------------------- | ----------------------- |
@@ -101,10 +128,10 @@ other pm2 apps (`ziktag-backend`, `track-user-backend`) are untouched.
 
 ### Databases (two Supabase projects)
 
-| Env  | Supabase ref           | Pooler host                            |
-| ---- | ---------------------- | -------------------------------------- |
-| dev  | `sysjwxfwkydhtclukuxh` | `aws-1-ap-south-1.pooler.supabase.com` |
-| prod | `zjbeveonmeqnmsjbjomw` | `aws-0-ap-south-1.pooler.supabase.com` |
+| Env  | Supabase ref           | Pooler host                            | Status |
+| ---- | ---------------------- | -------------------------------------- | ------ |
+| dev  | `sysjwxfwkydhtclukuxh` | `aws-1-ap-south-1.pooler.supabase.com` | retained, not served |
+| prod | `zjbeveonmeqnmsjbjomw` | `aws-0-ap-south-1.pooler.supabase.com` | **live since 2026-08-07** |
 
 `DATABASE_URL` uses the transaction pooler (`:6543?pgbouncer=true`) for
 runtime; `DIRECT_URL` uses the session pooler (`:5432`) for migrations. Note
@@ -124,23 +151,37 @@ The prod database schema was created on 2026-08-06 with `npm run db:deploy`
 > alike. Separating them requires a second pm2 app on its own port with its
 > own `.env`, and an nginx `/api` proxy change on the dev server block.
 
-#### Cutting the server over to the prod database
+#### Server cutover to the prod database — DONE 2026-08-07
 
-The server's `.env` (verified 2026-08-06) is still `NODE_ENV=development`,
-on the **dev** database, with `PUBLIC_WEB_URL`/`PUBLIC_API_URL` pointing at
-the retired `uniemax.zontechx.com`. Cutover = upload the local `.env`
-(already configured for prod) and restart:
+The server now runs `NODE_ENV=production` against the **prod** project
+(`aws-0-…`), with `PUBLIC_WEB_URL`/`PUBLIC_API_URL` = `https://uniemax.com`
+and an explicit `CORS_ORIGIN`. The pre-cutover file is backed up at
+`~/uniemax/backup/env.pre-proddb-20260807` (dev DB + the retired domain).
+
+Consequence, by design: the live catalog reset to empty. The former dev-DB
+content (8 stores / 39 products / 15 orders as of cutover) still exists in the
+**dev** project and is simply no longer served. Rollback = restore that backup
+and `pm2 restart uniemax-backend`.
+
+To repeat this kind of `.env` swap:
 
 ```bash
-cp ~/uniemax/backend/.env ~/uniemax/backup/env.pre-proddb   # back up first
+cp ~/uniemax/backend/.env ~/uniemax/backup/env.pre-<change>-<date>   # back up FIRST
 # pscp the local .env up, then:
-cd ~/uniemax/backend && npm run db:status   # expect "up to date" against aws-0-
-pm2 restart uniemax-backend && pm2 save
+cd ~/uniemax/backend && npm run db:status   # expect "up to date" on the right host
+pm2 restart uniemax-backend --update-env && pm2 save
 pm2 logs uniemax-backend --nostream --lines 20   # must NOT show a config exit
+curl -s http://127.0.0.1:4000/api/v1/public/push-config   # VAPID key unchanged?
 ```
 
-The prod DB has no admin account until `npm run create-admin -- <email> <pw>`
-is run against it.
+> ⚠️ **Never upload the local `VAPID_*` values.** The keys were generated on
+> the server (`npm run push-keys`) and differ from any local pair; overwriting
+> them invalidates every existing browser push subscription. Splice the
+> server's three `VAPID_*` lines into the file *before* uploading, then confirm
+> via `/api/v1/public/push-config` that `publicKey` is unchanged.
+
+An admin account is per-database: a fresh project has none until
+`npm run create-admin -- <email> <pw> [name]` runs against it.
 
 ## URLs
 
@@ -222,7 +263,7 @@ npm ci --no-audit --no-fund
 # 2. Backend (skip if no backend/ or prisma/ files changed)
 cd ~/uniemax/backend
 npx prisma generate        # needed whenever schema or deps changed
-npm run db:deploy          # apply any new committed migrations (no-op if none)
+APP_ENV=production npm run db:deploy   # pending migrations (no-op if none)
 npm run build
 pm2 restart uniemax-backend && pm2 save
 

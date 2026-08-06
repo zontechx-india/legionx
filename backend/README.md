@@ -10,12 +10,44 @@ Fastify + Prisma 7 + PostgreSQL (Supabase) API for the white-label e-commerce pl
 
 ```bash
 npm install
-cp .env .env            # ensure .env has DATABASE_URL + DIRECT_URL (Supabase)
+cp .env.example .env    # fill the SHARED block; see "Environment files" below
+                        # then create .env.development with NODE_ENV + DB URLs
 npx prisma generate     # generate the Prisma client
 npm run db:deploy       # apply migrations to the database
 npm run create-admin -- admin@store.com "StrongPassword" "Store Owner"   # first admin
 npm run dev             # start on http://localhost:4000 (hot reload)
 ```
+
+## Environment files
+
+Three layered files, none of them in git. **You never edit a file to switch
+environments** — the mode comes from the machine:
+
+| File | Purpose |
+| ---- | ------- |
+| `.env` | Values identical everywhere (JWT, S3, Cashfree, mail, media rules) |
+| `.env.development` | Your laptop — `NODE_ENV`, dev DB pair, `PUBLIC_WEB_URL` |
+| `.env.production` | The server — prod DB pair, `CORS_ORIGIN`, `PUBLIC_*`, its own VAPID keys |
+
+`src/config/loadEnv.ts` resolves `mode = APP_ENV ?? NODE_ENV ?? "development"`
+and loads `.env.<mode>` first, then `.env` for anything the overlay omits.
+Locally nothing is set, so you get development. On the server pm2 supplies
+`APP_ENV=production` via `ecosystem.config.cjs`.
+
+Point a local run at the production database for a one-off:
+
+```powershell
+$env:APP_ENV="production"; npm run dev        # or: npm run db:status
+```
+
+Every entrypoint prints its resolved target at boot, so the active database is
+never a guess:
+
+```
+env: mode=development NODE_ENV=development db=aws-1-….pooler.supabase.com:6543 web=http://localhost:5173
+```
+
+> A key belongs to **either** `.env` **or** a per-mode file, never both.
 
 Verify: `curl http://localhost:4000/health`
 

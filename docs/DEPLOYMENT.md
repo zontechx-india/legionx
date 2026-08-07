@@ -16,11 +16,18 @@ on the server everything is named `uniemax`).
 | Node / pm2  | Node v22.22.2, npm 10.9.7, pm2 (global) |
 | Resources   | 19G disk, 3.7G RAM + **2G swap** (`/swapfile`, added 2026-08-08 — four Node apps on this box and builds can spike) |
 
-The box is shared with unrelated projects: pm2 `ziktag-backend` (:3000) and
-`track-user-backend` (:3004), nginx site `ziktag`, and ~1.27G under
-`/var/www/{ziktag-backend,ziktag-admin,track-user-backend}`. **Do not touch
-them.** Routine reclaim that is safe (~1.4G): `npm cache clean --force`,
-`sudo journalctl --vacuum-time=7d`, `sudo apt-get clean`.
+The box is shared with an unrelated project: pm2 `ziktag-backend` (:3000),
+nginx site `ziktag`, and ~982M under `/var/www/{ziktag-backend,ziktag-admin}`.
+**Do not touch it.** Routine reclaim that is safe (~1.4G):
+`npm cache clean --force`, `sudo journalctl --vacuum-time=7d`,
+`sudo apt-get clean`.
+
+`track-user-backend` (:3004) was removed on 2026-08-08 at the owner's request —
+pm2 app deleted, `/var/www/track-user-backend` erased. Source remains at
+`github.com/anwin-paulji/track-user-backend` (`c7d30aa`); its `.env` and final
+pm2 logs are kept in `~/backup/track-user-removed-20260808/`. Port 3004 is now
+unused and its security-group rule can be closed. The Android client source
+still sits at `/var/www/track-user`.
 
 SSH example (PowerShell):
 

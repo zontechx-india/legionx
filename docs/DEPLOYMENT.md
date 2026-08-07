@@ -14,6 +14,13 @@ on the server everything is named `uniemax`).
 | SSH key     | `D:\AWS Key\servidex_main.ppk` (PuTTY format — use plink/pscp, or convert for OpenSSH) |
 | Host key    | `SHA256:HgxgT0NGDiSy1s8opS1b41JcA67ndeHN87b9Sk8DlME` |
 | Node / pm2  | Node v22.22.2, npm 10.9.7, pm2 (global) |
+| Resources   | 19G disk, 3.7G RAM + **2G swap** (`/swapfile`, added 2026-08-08 — four Node apps on this box and builds can spike) |
+
+The box is shared with unrelated projects: pm2 `ziktag-backend` (:3000) and
+`track-user-backend` (:3004), nginx site `ziktag`, and ~1.27G under
+`/var/www/{ziktag-backend,ziktag-admin,track-user-backend}`. **Do not touch
+them.** Routine reclaim that is safe (~1.4G): `npm cache clean --force`,
+`sudo journalctl --vacuum-time=7d`, `sudo apt-get clean`.
 
 SSH example (PowerShell):
 

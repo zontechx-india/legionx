@@ -1,0 +1,93 @@
+name: Deploy dev
+
+# Every push to main lands on dev.uniemax.zontechx.com automatically.
+# Production is a separate workflow, gated on a v* tag + approval.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    name: Deploy to dev
+    needs: ci
+    runs-on: ubuntu-latest
+    environment: development
+    steps:
+      - name: Install SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 "$SSH_USER@$SSH_HOST" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          cd ~/uniemax-dev
+
+          PREV=$(git rev-parse HEAD)
+          echo "previous: $PREV"
+          git fetch --quiet origin main
+          git reset --hard origin/main
+          echo "now at:   $(git rev-parse --short HEAD)"
+
+          # Root-only install (npm workspace); skip when the lockfile is unchanged.
+          if ! git diff --quiet "$PREV" HEAD -- package-lock.json; then
+            npm ci --no-audit --no-fund
+          fi
+
+          cd backend
+          npx prisma generate
+          # Applies pending migrations to the DEV database. No-op when none.
+          APP_ENV=development npm run db:deploy
+          npm run build
+
+          cd ../frontend
+          npm run build
+          sudo rm -rf /var/www/uniemax/*
+          sudo cp -r dist/* /var/www/uniemax/
+
+          pm2 restart uniemax-backend-dev --update-env
+          pm2 save
+          REMOTE
+
+      - name: Health check
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 "$SSH_USER@$SSH_HOST" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          sleep 8
+          grep -E '^env:' ~/.pm2/logs/uniemax-backend-dev-out.log | tail -1
+
+          # The dev backend must be on the DEV database. If this ever prints
+          # aws-0 the environments have crossed and the deploy is wrong.
+          grep -E '^env:' ~/.pm2/logs/uniemax-backend-dev-out.log | tail -1 | grep -q 'db=aws-1-' \
+            || { echo "FAIL: dev backend is not on the dev database"; exit 1; }
+
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4001/api/v1/public/media-config)
+          [ "$code" = "200" ] || { echo "FAIL: dev backend unhealthy ($code)"; exit 1; }
+          echo "dev backend healthy"
+          REMOTE
+
+      - name: Verify public dev URLs
+        run: |
+          for path in / /admin /api/v1/public/stores; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://dev.uniemax.zontechx.com$path")
+            echo "$path -> $code"
+            [ "$code" = "200" ] || exit 1
+          done

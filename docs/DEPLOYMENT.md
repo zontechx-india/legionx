@@ -30,7 +30,8 @@ plink -batch -ssh -hostkey "SHA256:HgxgT0NGDiSy1s8opS1b41JcA67ndeHN87b9Sk8DlME" 
 
 | Path                                  | Purpose                                  |
 | ------------------------------------- | ---------------------------------------- |
-| `/home/ubuntu/uniemax`                | Git clone of `git@github.com:zontechx-india/legionx.git` (branch `main`) |
+| `/home/ubuntu/uniemax`                | **PROD** clone — checked out to a `v*` tag (detached HEAD) |
+| `/home/ubuntu/uniemax-dev`            | **DEV** clone — tracks `main` |
 | `/home/ubuntu/uniemax/backend`        | Fastify API — built to `dist/`, run by pm2 |
 | `/home/ubuntu/uniemax/frontend`       | Vite app — built to `dist/`, copied to nginx root |
 | `/var/www/uniemax`                    | nginx web root (frontend build output)   |
@@ -52,11 +53,41 @@ The EC2's own SSH key is registered with GitHub (user `anwin-paulji`), so
 | 8081 | **nginx → UnieMax PROD frontend + `/api` proxy (dedicated port)** | needs TCP 8081 inbound in the security group |
 | 80   | nginx → same UnieMax site (`default_server`, kept temporarily) | ✅ (security group open) |
 | 443  | nginx (other project SSL)          | ✅                       |
-| 4000 | UnieMax backend (Fastify, pm2 `uniemax-backend`) | ❌ internal only — proxied via nginx `/api` |
+| 4000 | UnieMax **PROD** backend (pm2 `uniemax-backend`) | ❌ internal only — proxied via nginx `/api` |
+| 4001 | UnieMax **DEV** backend (pm2 `uniemax-backend-dev`) | ❌ internal only — proxied via nginx `/api` |
 | 3000 | ziktag-backend (other project)     | ❌ (SG blocks)           |
 | 3004 | track-user-backend (other project) | ✅                       |
 
-The backend port is **explicitly** set via `PORT=4000` in `backend/.env` — it is
+## Two environments (since 2026-08-07)
+
+Dev and prod are genuinely separate: separate clone, backend process, port and
+database. Only the frontend *root* is shared in the sense that each has its own.
+
+| | **dev** | **prod** |
+| --- | --- | --- |
+| Clone | `~/uniemax-dev` (tracks `main`) | `~/uniemax` (tracks `v*` tags) |
+| pm2 app | `uniemax-backend-dev` | `uniemax-backend` |
+| Port | `:4001` | `:4000` |
+| `APP_ENV` | `development` | `production` |
+| Supabase | `sysjwxfwkydhtclukuxh` (`aws-1-`) | `zjbeveonmeqnmsjbjomw` (`aws-0-`) |
+| Frontend root | `/var/www/uniemax` | `/var/www/uniemax-prod` |
+| nginx vhosts | `uniemax-domain`, `uniemax` | `uniemax-com`, `uniemax-prod` |
+| URL | `dev.uniemax.zontechx.com` | `uniemax.com`, `www` |
+| Deployed by | push to `main` → `deploy-dev.yml` | tag `v*` + approval → `deploy-prod.yml` |
+
+`PORT=4001` comes from `backend/ecosystem.dev.config.cjs`, not from
+`.env.development` — a real env var beats dotenv, so local development still
+uses 4000 and the Vite proxy is unaffected. Pre-change nginx backups:
+`/etc/nginx/sites-available/{uniemax,uniemax-domain}.pre-4001`.
+
+The quickest check that the split is intact — the two must differ:
+
+```bash
+curl -s http://127.0.0.1:4001/api/v1/public/stats   # dev  → real catalog
+curl -s http://127.0.0.1:4000/api/v1/public/stats   # prod → its own data
+```
+
+The prod backend port is **explicitly** set via `PORT=4000` in `backend/.env` — it is
 not a framework default. The frontend is a static production build served by
 nginx; the `uniemax` site listens on its **dedicated port 8080** and (for now)
 also on 80 as `default_server`. Once the domain is mapped / other projects need
@@ -159,10 +190,9 @@ string splits at the wrong `@` and the host parses as garbage.
 The prod database schema was created on 2026-08-06 with `npm run db:deploy`
 (all 3 migrations, **no data copied** from dev).
 
-> ⚠️ There is only **one** backend process, so whichever pair is active in
-> `backend/.env` is the database for the dev site, the prod site and `:8081`
-> alike. Separating them requires a second pm2 app on its own port with its
-> own `.env`, and an nginx `/api` proxy change on the dev server block.
+Each clone talks to exactly one database — see "Two environments" above. The
+dev clone owns the only `.env.development` on the box; the prod clone must
+never gain one.
 
 #### Server cutover to the prod database — DONE 2026-08-07
 
@@ -217,10 +247,10 @@ An admin account is per-database: a fresh project has none until
 | `http://13.206.249.204:8081/`                | Same prod site, direct port (needs TCP 8081 in SG) |
 
 Prod serves its own frontend build from `/var/www/uniemax-prod` (nginx sites
-`uniemax-prod` on port 8081 + `uniemax-com` for the domain) but shares the
-**same backend** (`uniemax-backend`, :4000) as dev. The prod frontend only
-changes when `/deploy_prod` runs, so it can intentionally lag behind dev.
-Backend changes deployed via `/deploy_dev` affect **both** sites.
+`uniemax-prod` on port 8081 + `uniemax-com` for the domain) and its **own
+backend** (`uniemax-backend`, `:4000`, prod database) built from the `~/uniemax`
+clone. Nothing is shared with dev any more — a dev deploy cannot affect
+production, and prod intentionally lags dev until a `v*` tag is released.
 
 Prod domain & HTTPS: A record `uniemax.com` (+ `www`) → `13.206.249.204`
 (**DNS only** / grey cloud — same renewal rule as dev), Let's Encrypt cert via
@@ -247,18 +277,38 @@ domain. TCP 8081 is open in the security group for direct-IP access.
 - The plain-IP site (`sites-available/uniemax`, ports 80 + 8080) is separate
   from the domain vhost, so certbot edits never touch it.
 
-## Redeploy procedure (Claude Code runbook)
+## Deployment — GitHub Actions (primary)
 
-Deployment is done by Claude Code from the local machine (no CI/CD): push to
-`main` on GitHub, then run **`/deploy_dev`** in Claude Code (or say "deploy
-uniemax to EC2"). Claude runs the steps below over SSH (plink, see
-[Server](#server)).
+CI/CD lives in `.github/workflows/`:
 
-For production, run **`/deploy_prod`** — frontend-only: same pull as below, then
-`npm run build` in `frontend/` and copy `dist/*` to `/var/www/uniemax-prod`
-(never touches the backend/pm2). Verify prod via
-`curl http://127.0.0.1:8081/` + `/admin` + `/api/v1/public/stores` on the
-server, then `https://uniemax.com/` from the local machine.
+| Workflow | Trigger | Does |
+| -------- | ------- | ---- |
+| `ci.yml` | every push + PR | `npm ci`, `prisma generate`, backend typecheck + build, frontend build. Also reused as a gate by both deploys. |
+| `deploy-dev.yml` | push to `main` | Deploys `~/uniemax-dev` → `dev.uniemax.zontechx.com`. Runs `db:deploy` against the **dev** DB. |
+| `deploy-prod.yml` | tag `v*` (or manual) | Waits for approval on the `production` environment, then deploys `~/uniemax` → `uniemax.com`. Health-checks and **auto-rolls-back** on failure. |
+
+Release to production:
+
+```bash
+git tag v1.2.0 && git push origin v1.2.0     # then approve in the Actions tab
+```
+
+Both deploys assert the boot banner names the right database (`aws-1-` for dev,
+`aws-0-` for prod) and fail rather than continue if it doesn't.
+
+Required repo configuration:
+
+- **Secrets:** `SSH_PRIVATE_KEY` (OpenSSH format), `SSH_HOST`, `SSH_USER`,
+  `SSH_KNOWN_HOSTS`.
+- **Environments:** `development` (no gate) and `production` (required
+  reviewer — this is the approval gate).
+
+### Manual fallback (Claude Code runbook)
+
+`/deploy_dev` and `/deploy_prod` remain as break-glass for when Actions is
+unavailable or a one-off is needed. They run the steps below over SSH (plink,
+see [Server](#server)). Note `/deploy_prod` is frontend-only and never touches
+the backend or pm2.
 
 > ⚠️ **The repo root is an npm workspace** (`frontend` + `backend`). Always run
 > `npm ci` from the repo **root** (`~/uniemax`). Running it inside `backend/` or

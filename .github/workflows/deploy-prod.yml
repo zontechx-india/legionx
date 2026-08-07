@@ -1,0 +1,121 @@
+name: Deploy production
+
+# Production ships on a version tag only, and then only after a human
+# approves the `production` environment in GitHub.
+#
+#   git tag v1.2.0 && git push origin v1.2.0
+#
+# Rolling back = re-running this workflow from an earlier tag.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag or SHA to deploy (defaults to the current ref)"
+        required: false
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    name: Deploy to production
+    needs: ci
+    runs-on: ubuntu-latest
+    # Gate: configure `production` in Settings → Environments with yourself
+    # as a required reviewer. The job pauses here until approved.
+    environment:
+      name: production
+      url: https://uniemax.com
+    steps:
+      - name: Install SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          TARGET: ${{ github.event.inputs.ref || github.ref_name }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 "$SSH_USER@$SSH_HOST" "TARGET='$TARGET' bash -se" <<'REMOTE'
+          set -euo pipefail
+          cd ~/uniemax
+
+          PREV=$(git rev-parse HEAD)
+          echo "$PREV" > /tmp/uniemax-prev-sha
+          echo "previous: $PREV"
+
+          git fetch --quiet --tags origin
+          git checkout --quiet --force "$TARGET"
+          echo "now at:   $(git rev-parse --short HEAD) ($TARGET)"
+
+          if ! git diff --quiet "$PREV" HEAD -- package-lock.json; then
+            npm ci --no-audit --no-fund
+          fi
+
+          cd backend
+          npx prisma generate
+          # Migrations run BEFORE the restart so the new code never meets an
+          # old schema. Note: this step is not covered by the rollback below —
+          # a migration that has applied stays applied.
+          APP_ENV=production npm run db:deploy
+          npm run build
+
+          cd ../frontend
+          npm run build
+          sudo rm -rf /var/www/uniemax-prod/*
+          sudo cp -r dist/* /var/www/uniemax-prod/
+
+          pm2 restart uniemax-backend --update-env
+          pm2 save
+          REMOTE
+
+      - name: Health check (rolls back on failure)
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 "$SSH_USER@$SSH_HOST" 'bash -se' <<'REMOTE'
+          set -uo pipefail
+          sleep 8
+
+          banner=$(grep -E '^env:' ~/.pm2/logs/uniemax-backend-out.log | tail -1)
+          echo "$banner"
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4000/api/v1/public/media-config)
+
+          # Production must be on the PROD database (aws-0) and answering 200.
+          if echo "$banner" | grep -q 'db=aws-0-' && [ "$code" = "200" ]; then
+            echo "production healthy"
+            exit 0
+          fi
+
+          echo "FAIL: unhealthy (http=$code) — rolling back"
+          cd ~/uniemax
+          git checkout --quiet --force "$(cat /tmp/uniemax-prev-sha)"
+          cd backend && npx prisma generate && npm run build
+          cd ../frontend && npm run build
+          sudo rm -rf /var/www/uniemax-prod/*
+          sudo cp -r dist/* /var/www/uniemax-prod/
+          pm2 restart uniemax-backend --update-env
+          echo "rolled back to $(git -C ~/uniemax rev-parse --short HEAD)"
+          exit 1
+          REMOTE
+
+      - name: Verify public production URLs
+        run: |
+          for url in https://uniemax.com/ https://uniemax.com/admin \
+                     https://uniemax.com/api/v1/public/stores https://www.uniemax.com/; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$url")
+            echo "$url -> $code"
+            [ "$code" = "200" ] || exit 1
+          done

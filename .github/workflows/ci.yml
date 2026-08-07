@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call: # reused as a gate by the deploy workflows
+
+jobs:
+  build:
+    name: Typecheck + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      # Repo root is an npm workspace (frontend + backend) — always install
+      # from the root. A per-folder install wipes the shared node_modules.
+      - run: npm ci --no-audit --no-fund
+
+      # Prisma client is git-ignored and generated; the backend will not
+      # typecheck without it.
+      - run: npx prisma generate
+        working-directory: backend
+
+      - run: npm run typecheck
+        working-directory: backend
+
+      - run: npm run build
+        working-directory: backend
+
+      - run: npm run build
+        working-directory: frontend

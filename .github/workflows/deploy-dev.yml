@@ -21,6 +21,22 @@ jobs:
     runs-on: ubuntu-latest
     environment: development
     steps:
+      # Fail with a readable message instead of an ssh usage dump when a
+      # secret is missing or scoped to the wrong environment.
+      - name: Check required secrets
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          missing=0
+          for v in SSH_HOST SSH_USER SSH_PRIVATE_KEY SSH_KNOWN_HOSTS; do
+            if [ -z "${!v}" ]; then echo "::error::secret $v is empty or not set"; missing=1; fi
+          done
+          [ "$missing" = "0" ] || { echo "Set them in Settings > Secrets and variables > Actions."; exit 1; }
+          echo "all four secrets present"
+
       - name: Install SSH key
         run: |
           mkdir -p ~/.ssh
